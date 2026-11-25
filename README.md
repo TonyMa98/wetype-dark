@@ -40,7 +40,6 @@ gradle :app:assembleDebug
 - 产物：`app/build/outputs/apk/debug/app-debug.apk`
 - `app/libs/` 里是 Xposed API（`libxposed-api-102.jar`、`api-102.0.0.aar`）和自带的 `api` 模块，不用额外拉依赖；
 - `local.properties` 不入库，自己填 `sdk.dir`；
-- `tools/live-colors/` 是调色台网页的独立调试副本，APK 里用的是 `app/src/main/assets/live-colors/`。
 
 ## 安装
 
