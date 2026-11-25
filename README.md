@@ -8,14 +8,16 @@
 
 ## 功能图解
 
-| | |
-| --- | --- |
-| [配色：面板色 / 主题色 / 按键色 / 描边 / 阴影全部可调](screenshots/02-palette.png) | [按应用指定皮肤，跟随系统深色模式](screenshots/04-per-app.png) |
-| <a href="screenshots/02-palette.png"><img src="screenshots/02-palette.png" width="360"></a> | <a href="screenshots/04-per-app.png"><img src="screenshots/04-per-app.png" width="360"></a> |
-| [极暗 / 亮色 / 暗色随场景切换](screenshots/03-scenes.png) | [按键投影、颜色分项参数调节](screenshots/05-params.png) |
-| <a href="screenshots/03-scenes.png"><img src="screenshots/03-scenes.png" width="360"></a> | <a href="screenshots/05-params.png"><img src="screenshots/05-params.png" width="360"></a> |
+<img src="screenshots/02-palette.png" width="820" alt="配色：面板色 / 主题色 / 按键色 / 描边 / 阴影全部可调">
 
-[网页端实时预览：电脑上调色，手机端即时生效](screenshots/06-web-preview.png)
+<img src="screenshots/03-scenes.png" width="820" alt="极暗 / 亮色 / 暗色随场景切换">
+
+<img src="screenshots/04-per-app.png" width="820" alt="按应用指定皮肤，跟随系统深色模式">
+
+<img src="screenshots/05-params.png" width="820" alt="按键投影、颜色分项参数调节">
+
+<img src="screenshots/06-web-preview.png" width="820" alt="网页端实时预览：电脑上调色，手机端即时生效">
+
 
 ## 功能
 
