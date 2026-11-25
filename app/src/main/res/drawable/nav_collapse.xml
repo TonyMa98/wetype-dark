@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「收起输入法」⌄：用户给的矢量（容器 4772.svg，viewBox 97x97）。
+     填色统一 #D8D8D8，运行时用 setTint 按亮/暗皮肤染色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="97"
+    android:viewportHeight="97">
+    <path
+        android:fillColor="#FFD8D8D8"
+        android:pathData="M80.24,37.24 L53.36,64.12 Q51.61,65.88 49.12,65.88 Q46.64,65.88 44.88,64.12 L18,37.24 L22.24,33 L49.12,59.88 L76,33 L80.24,37.24 Z" />
+</vector>

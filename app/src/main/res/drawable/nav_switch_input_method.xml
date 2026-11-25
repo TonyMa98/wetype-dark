@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 「切换输入法」⌨：用户给的矢量（容器 4773.svg，viewBox 97x97）。
+     填色统一 #D8D8D8，运行时用 setTint 按亮/暗皮肤染色。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="97"
+    android:viewportHeight="97">
+    <path
+        android:fillColor="#FFD8D8D8"
+        android:fillType="evenOdd"
+        android:pathData="M7,70 L7,28 Q7,21.79 11.39,17.39 Q15.79,13 22,13 L76,13 Q82.21,13 86.61,17.39 Q91,21.79 91,28 L91,70 Q91,76.21 86.61,80.61 Q82.21,85 76,85 L22,85 Q15.79,85 11.39,80.61 Q7,76.21 7,70 Z M13,70 Q13,73.73 15.64,76.36 Q18.27,79 22,79 L76,79 Q79.73,79 82.36,76.36 Q85,73.73 85,70 L85,28 Q85,24.27 82.36,21.64 Q79.73,19 76,19 L22,19 Q18.27,19 15.64,21.64 Q13,24.27 13,28 L13,70 Z M29,32 L37,32 L37,40 L29,40 L29,32 Z M53,32 L45,32 L45,40 L53,40 L53,32 Z M61,32 L69,32 L69,40 L61,40 L61,32 Z M29,46 L37,46 L37,54 L29,54 L29,46 Z M45,46 L53,46 L53,54 L45,54 L45,46 Z M69,46 L61,46 L61,54 L69,54 L69,46 Z M69,61 L29,61 L29,69 L69,69 L69,61 Z" />
+</vector>

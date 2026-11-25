@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="settings_bg">#000000</color>
+    <color name="settings_card">#1C1C1E</color>
+    <color name="settings_capsule">#1E1E1E</color>
+    <color name="settings_text_main">#E6FFFFFF</color>
+    <color name="settings_text_sub">#8AFFFFFF</color>
+    <color name="settings_text_dim">#42FFFFFF</color>
+    <color name="settings_divider">#1FFFFFFF</color>
+    <color name="settings_tab_highlight">#2C2C2E</color>
+    <color name="settings_track">#3A3A3C</color>
+    <color name="settings_row_icon">#E6FFFFFF</color>
+    <color name="settings_chevron">#6E6E76</color>
+    <color name="settings_check_off">#3A3A3C</color>
+    <color name="settings_tab_icon">#E6FFFFFF</color>
+    <color name="settings_search_icon">#8E8E93</color>
+    <color name="settings_accent">#0A6AFF</color>
+    <color name="settings_scrim">#000000</color>
+</resources>

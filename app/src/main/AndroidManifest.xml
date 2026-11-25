@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- 手机端调色台：内置 HTTP 服务 + 常驻前台服务 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <application
+        android:allowBackup="false"
+        android:hasCode="true"
+        android:label="wetype-dark"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme">
+
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="微信输入法面板外观模块" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="102" />
+        <service
+            android:name=".PaletteServerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <activity
+            android:name=".ui.AppsActivity"
+            android:exported="true"
+            android:label="wetype-dark"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ui.SettingsPageActivity"
+            android:exported="false"
+            android:label="设置" />
+
+        <activity
+            android:name=".ui.GestureActivity"
+            android:exported="false"
+            android:label="下滑功能" />
+
+        <activity
+            android:name=".ui.KeyTextTuningActivity"
+            android:exported="false"
+            android:label="按键文字位置" />
+
+        <activity
+            android:name=".ui.ColorConfigActivity"
+            android:exported="false"
+            android:label="颜色配置" />
+    </application>
+
+</manifest>

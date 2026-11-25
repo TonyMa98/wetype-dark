@@ -2,7 +2,7 @@
 
 微信输入法（WeType）的 LSPosed 模块，给键盘换成自己的配色：亮色 / 深色 / 极暗三套皮肤、面板磨砂、按键自绘、候选词与功能键统一取色，并附带一个实时调色台。
 
-> 本仓库**只发布二进制**，源码不公开。
+> 仓库同时包含模块源码（`app/`）与已编译的 Release 包；源码只用于编译与学习，不做二次分发授权。
 
 <img src="screenshots/01-cover.png" width="820" alt="wetype-dark">
 
@@ -27,6 +27,20 @@
 - **候选栏 / 功能键**：候选条底色、候选词文字色、右侧 AI 表情 / 剪贴板 / 收起三颗功能键配色统一。
 - **悬浮键盘**：拖动面板不糊屏，表情页有独立底色，横屏悬浮底部不再出现满宽长条。
 - **实时调色台**：内置网页调色台，改完即时下发到键盘，不用重启输入法。
+
+## 编译
+
+```bash
+# 依赖：JDK 17、Android SDK（API 36）、Gradle 9.x
+export JAVA_HOME=/path/to/jbr-17
+export ANDROID_HOME=/path/to/android-sdk
+gradle :app:assembleDebug
+```
+
+- 产物：`app/build/outputs/apk/debug/app-debug.apk`
+- `app/libs/` 里是 Xposed API（`libxposed-api-102.jar`、`api-102.0.0.aar`）和自带的 `api` 模块，不用额外拉依赖；
+- `local.properties` 不入库，自己填 `sdk.dir`；
+- `tools/live-colors/` 是调色台网页的独立调试副本，APK 里用的是 `app/src/main/assets/live-colors/`。
 
 ## 安装
 

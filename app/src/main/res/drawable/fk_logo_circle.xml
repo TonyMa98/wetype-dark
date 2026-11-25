@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  候选栏左上角 logo 的「圆」层。
+  从微信输入法自带的 icon_logo_grey.xml 里拆出来的：原图是一个 vector，
+  圆和里面的 P 是同一个 drawable 的两条 path，整体 tint 会把两者一起染色，
+  所以拆成两个 drawable，圆走 LOGO_CIRCLE、P 走 LOGO_TINT。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#ffffffff"
+        android:pathData="M48,48m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0" />
+</vector>

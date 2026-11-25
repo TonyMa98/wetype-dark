@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  COUI 品牌蓝纯色按钮：
+  - 静止状态：纯色 #FF0080FF（coui_color_primary_blue）
+  - 按下：ripple 反馈（仅按下时可见，不影响静止纯色观感）
+  - 阴影由 View.setElevation 提供
+  - 已去除高光渐变层（避免溢出 / 用户要求纯色）
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#40FFFFFF">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="26dp" />
+            <solid android:color="#FF0080FF" />
+        </shape>
+    </item>
+</ripple>

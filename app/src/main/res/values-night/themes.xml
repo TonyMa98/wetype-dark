@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色：Theme.Material.NoActionBar（不带 Light）= 系统深色父主题 -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <!-- 开屏页已删除：窗口底色直接用页面底色（夜间纯黑），不再有过渡层 -->
+        <item name="android:windowBackground">@color/settings_bg</item>
+        <!-- Android 12+ 系统 SplashScreen：同色底 + 留空图标，避免先闪一张应用图标卡再进页面 -->
+        <item name="android:windowSplashScreenBackground">@color/settings_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_blank</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

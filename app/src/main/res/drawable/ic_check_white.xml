@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- 对勾用描边而不是填充：Material 那个填充勾缩到 14dp 的圈里只有约 1.2dp 粗，偏细。
+         这里 3.2/24 的线宽 + 圆头圆角，缩到 14dp 后约 1.9dp，明显更实。 -->
+    <path
+        android:pathData="M5.2,12.6 L9.8,17.2 L19,7"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

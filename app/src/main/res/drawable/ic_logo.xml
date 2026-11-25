@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 顶部 logo：来自 /Users/tonyma/导出/logo.svg（353x291 单路径 + 白色竖向渐变 90%→60%），
+     等比缩放进 48dp 深色圆角方块；路径坐标已预先换算，避免 group 变换把渐变坐标一起缩放。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+  <path android:fillColor="#111113"
+      android:pathData="M12,0h24c6.6,0 12,5.4 12,12v24c0,6.6 -5.4,12 -12,12H12C5.4,48 0,42.6 0,36V12C0,5.4 5.4,0 12,0z"/>
+  <path android:pathData="M37.00,19.36C37.00,16.14,35.19,13.33,29.89,13.33C29.43,13.33,29.03,13.61,28.88,14.04L28.25,16.57C28.13,16.90,28.38,17.24,28.72,17.24L30.86,17.24C32.25,17.24,33.18,18.19,33.09,19.58C32.96,21.69,31.24,23.01,29.47,23.01L24.25,23.01L26.76,14.14C26.89,13.69,26.62,13.32,26.17,13.32L23.70,13.32C23.25,13.32,22.78,13.69,22.65,14.14L20.14,23.01L12.73,23.01C12.28,23.01,11.88,23.29,11.73,23.72L11.12,26.17C11.00,26.50,11.24,26.84,11.59,26.84L19.04,26.84L17.06,33.86C16.94,34.31,17.20,34.68,17.65,34.68L20.12,34.68C20.57,34.68,21.04,34.31,21.17,33.86L23.15,26.84L29.33,26.84C34.07,26.84,37.00,22.56,37.00,19.36L37.00,19.36Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="linear"
+          android:startX="24" android:startY="13.32"
+          android:endX="24" android:endY="34.68">
+        <item android:offset="0" android:color="#E6FFFFFF"/>
+        <item android:offset="1" android:color="#99FFFFFF"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+</vector>

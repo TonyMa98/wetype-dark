@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- 地球：外圈 + 赤道 + 一条经线 -->
+    <path
+        android:strokeColor="@color/settings_row_icon"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round"
+        android:pathData="M12,3.4 A8.6,8.6 0 0,1 12,20.6 A8.6,8.6 0 0,1 12,3.4 Z" />
+    <path
+        android:strokeColor="@color/settings_row_icon"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round"
+        android:pathData="M3.4,12 L20.6,12" />
+    <path
+        android:strokeColor="@color/settings_row_icon"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round"
+        android:pathData="M12,3.4 A4.5,8.6 0 0,1 12,20.6 A4.5,8.6 0 0,1 12,3.4 Z" />
+    <path
+        android:strokeColor="@color/settings_row_icon"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M5.2,7.6 L18.8,7.6" />
+    <path
+        android:strokeColor="@color/settings_row_icon"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M5.2,16.4 L18.8,16.4" />
+</vector>

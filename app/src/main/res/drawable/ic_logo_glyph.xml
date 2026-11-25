@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开屏用的纯字形 logo（不含深色方块）：同 logo.svg，白色竖向渐变 90%→60%，
+     缩放到 48dp 画布内宽 40dp；坐标已预先换算，渐变坐标随之正确。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="48" android:viewportHeight="48">
+  <path android:pathData="M44.00,16.85C44.00,11.92,41.22,7.58,33.05,7.58C32.36,7.58,31.74,8.02,31.51,8.68L30.54,12.57C30.36,13.07,30.73,13.60,31.27,13.60L34.55,13.60C36.70,13.60,38.12,15.06,37.98,17.20C37.78,20.44,35.14,22.47,32.41,22.47L24.38,22.47L28.24,8.84C28.44,8.14,28.04,7.57,27.34,7.57L23.54,7.57C22.84,7.57,22.12,8.13,21.92,8.84L18.06,22.47L6.67,22.47C5.97,22.47,5.35,22.91,5.12,23.57L4.18,27.34C4.00,27.84,4.37,28.37,4.91,28.37L16.37,28.37L13.33,39.16C13.13,39.87,13.54,40.43,14.24,40.43L18.03,40.43C18.73,40.43,19.45,39.87,19.65,39.16L22.70,28.37L32.20,28.37C39.49,28.37,44.00,21.78,44.00,16.86L44.00,16.85Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="linear"
+          android:startX="24" android:startY="7.57"
+          android:endX="24" android:endY="40.43">
+        <item android:offset="0" android:color="#E6FFFFFF"/>
+        <item android:offset="1" android:color="#99FFFFFF"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+</vector>

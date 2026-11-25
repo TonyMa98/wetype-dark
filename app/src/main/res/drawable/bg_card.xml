@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- COUI 卡片：圆角 20dp（真值 support_preference_card_corner，见参考包 5.5） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:radius="20dp" />
+    <solid android:color="@color/settings_card" />
+</shape>

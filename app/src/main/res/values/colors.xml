@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#282828</color>
+    <color name="window_bg">#F0F0EF</color>
+    <color name="settings_bg">#F0F0EF</color>
+    <color name="settings_card">#FFFFFF</color>
+    <!-- 胶囊底栏填色：ColorOS 真实观感是「不透明白胶囊」，不是磨砂玻璃 -->
+    <color name="settings_capsule">#FAFAFA</color>
+    <color name="settings_text_main">#E6000000</color>
+    <color name="settings_text_sub">#8A000000</color>
+    <color name="settings_text_dim">#42000000</color>
+    <color name="settings_divider">#E0E0E0</color>
+    <color name="settings_tab_highlight">#F1F1F3</color>
+    <color name="settings_track">#ECECEF</color>
+    <color name="settings_row_icon">#E6000000</color>
+    <color name="settings_chevron">#C7C7CC</color>
+    <color name="settings_check_off">#E5E5E9</color>
+    <color name="settings_tab_icon">#E6000000</color>
+    <color name="settings_search_icon">#8E8E93</color>
+    <color name="settings_accent">#0A6AFF</color>
+    <!-- 底部渐隐遮罩基色：亮色 #EDEDED / 深色纯黑（values-night 覆盖） -->
+    <color name="settings_scrim">#F0F0EF</color>
+</resources>

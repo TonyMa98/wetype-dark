@@ -1,0 +1,3296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WETYPE 调色台 · 输入法面板</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --paper:#0C0C0D;--surface:#151517;--surface2:#1A1A1D;--sel:#242428;
+    --ink:#EDEDE9;--muted:#8E8E88;--faint:#6B6B66;--line:#2A2A2D;--line2:#3A3A3E;--stage:#101012;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased}
+  button,input,select{font-family:inherit;color:inherit}
+
+  .bar{min-height:52px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;justify-content:space-between;padding:8px 22px;
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;background:rgba(12,12,13,.88);backdrop-filter:blur(8px)}
+  .brand{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .brand .mark{width:11px;height:11px;background:var(--ink)}
+  .brand .name{font-size:12px;font-weight:700;letter-spacing:.16em}
+  .brand .slash{color:var(--muted);font-size:12px}
+  .brand .page{font-size:12px;color:var(--muted)}
+  .ver{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--faint);
+    border:1px solid var(--line);padding:2px 5px;margin-left:4px}
+  .bar-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .btn{height:29px;padding:0 11px;border:1px solid var(--line2);background:transparent;font-size:11px;cursor:pointer}
+  .btn:hover{background:var(--ink);color:var(--paper)}
+  .btn.ghost{border-color:var(--line)}
+  .btn.ghost:hover{background:transparent;color:var(--ink);border-color:var(--ink)}
+
+  .layout{--leftW:206px;--rightW:300px;display:grid;
+    grid-template-columns:var(--leftW) 8px minmax(0,1fr) 8px var(--rightW);height:calc(100vh - 52px)}
+  .split{position:relative;cursor:col-resize;touch-action:none;user-select:none}
+  .split::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:1px;background:var(--line);
+    opacity:.7;transition:opacity .12s,background .12s}
+  .split:hover::after,.split.drag::after{width:2px;opacity:1;background:var(--ink)}
+  .targets,.controls{overflow-y:auto}
+  .targets{display:flex;flex-direction:column}
+  .controls{padding:20px 18px 34px;display:flex;flex-direction:column;gap:18px}
+  .controls > *{flex:0 0 auto}
+
+  .side-head{padding:18px 16px 12px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .side-head .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:8px}
+  .themes{display:flex;flex-direction:column;border:1px solid var(--line);margin-bottom:18px}
+  .theme{display:flex;align-items:center;justify-content:space-between;gap:8px;height:34px;padding:0 10px;
+    border:0;border-bottom:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:11.5px;color:#C6C6C0;text-align:left}
+  .theme:last-child{border-bottom:0}
+  .theme .d{display:flex;gap:3px}
+  .theme .d i{width:8px;height:8px;border:1px solid rgba(255,255,255,.18);display:block}
+  .theme:hover{background:#1D1D21}
+  .theme.on{background:var(--sel);color:var(--ink)}
+  .theme.on .d i{border-color:rgba(255,255,255,.5)}
+  .copy-btn{margin:8px 12px 6px;height:28px;border:1px solid var(--line);border-radius:6px;
+    background:var(--surface);color:#C6C6C0;font-size:11px;cursor:pointer}
+  .copy-btn:hover{background:#1D1D21;color:var(--ink)}
+
+  .tlist{padding:6px 0;flex:0 0 auto}
+  .titem{display:flex;align-items:center;gap:9px;width:100%;padding:10px 14px;border:0;background:transparent;text-align:left;cursor:pointer;position:relative}
+  .titem:hover{background:#18181B}
+  .titem.on{background:#1B1B1F}
+  .titem.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--ink)}
+  .titem .chip{width:20px;height:20px;flex:0 0 20px;border:1px solid rgba(255,255,255,.16);position:relative;
+    background-image:linear-gradient(45deg,#2E2E32 25%,transparent 25%,transparent 75%,#2E2E32 75%),
+                      linear-gradient(45deg,#2E2E32 25%,transparent 25%,transparent 75%,#2E2E32 75%);
+    background-size:8px 8px;background-position:0 0,4px 4px}
+  .titem .chip i{position:absolute;inset:0}
+  .titem .meta{min-width:0;flex:1}
+  .titem .n{font-size:11.5px;font-weight:500;display:flex;align-items:center;gap:5px}
+  .titem .d{font-family:var(--mono);font-size:8.5px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag{font-family:var(--mono);font-size:7.5px;letter-spacing:.05em;padding:1px 3px;border:1px solid var(--line2);color:var(--muted)}
+  .tag.live{border-color:rgba(74,222,128,.5);color:#5BE38D}
+
+  .side-tool{margin-top:auto;border-top:1px solid var(--line);padding:12px 14px 20px;background:var(--paper);flex:0 0 auto}
+  .side-tool .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:8px}
+  .drop{border:1px dashed var(--line2);min-height:54px;display:grid;place-items:center;font-size:10px;color:var(--muted);
+    cursor:pointer;text-align:center;line-height:1.5;background:var(--surface);padding:6px}
+  .drop:hover{border-color:var(--ink);color:var(--ink)}
+  .imgwrap{display:none;margin-top:7px;border:1px solid var(--line);background:var(--surface)}
+  .imgwrap canvas{display:block;width:100%;height:auto;cursor:crosshair}
+  .imgpal{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:5px}
+  .imgpal button{height:19px;border:1px solid rgba(255,255,255,.16);cursor:pointer;padding:0}
+  .mic-actions{margin-top:6px}
+  .mic-actions .btn{width:100%;height:26px;font-size:10px}
+
+  /* 高光描边预览：外层渐变 + 内层挖空，等价于真机那圈渐变描边 */
+  .rim-box{position:relative;height:92px;border-radius:16px;overflow:hidden;margin-bottom:14px;
+    background:var(--keybg)}
+  .rim-fill{position:absolute;inset:0}
+  .rim-hole{position:absolute;display:flex;align-items:center;justify-content:center;
+    border-radius:12px;background:var(--keybg);
+    font-size:15px;font-weight:500;color:var(--text);letter-spacing:.02em}
+
+  /* 按键投影（右栏 06 块）的取色器 */
+  input[type="color"]{-webkit-appearance:none;appearance:none;border:0;background:transparent;padding:0;cursor:pointer;
+    width:100%;height:22px;flex:1;min-width:0}
+  input[type="color"]::-webkit-color-swatch-wrapper{padding:0}
+  input[type="color"]::-webkit-color-swatch{border:1px solid rgba(255,255,255,.22)}
+
+  .stage{position:relative;display:flex;flex-direction:column;padding:18px 22px 22px;overflow:auto;
+    background:var(--stage);
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px}
+  .stage-head{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:14px}
+  .stage-tag{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--faint);white-space:nowrap}
+  .stage-tag b{color:var(--ink);font-weight:600}
+  .seg{display:flex;border:1px solid var(--line);background:var(--surface)}
+  .seg button{height:26px;padding:0 12px;border:0;background:transparent;font-size:10.5px;color:#A6A6A0;cursor:pointer}
+  .seg button.on{background:var(--sel);color:var(--ink)}
+  .profiles{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+  .profiles button{height:28px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:#8A8A85;font-size:11px;cursor:pointer}
+  .profiles button.on{background:var(--sel);color:var(--ink);border-color:transparent}
+  .new-profile{display:block;width:100%;height:30px;margin:0 0 18px;border:1px dashed var(--line);border-radius:999px;
+    background:transparent;color:#8A8A85;font-size:11px;cursor:pointer}
+  .new-profile:hover{color:var(--ink);border-color:var(--muted)}
+
+  .board{width:60%;max-width:520px;margin:auto;padding:0}
+  /* 整页底部那条说明：横跨整页、水平居中，跟键盘预览之间隔着整屏 */
+  /* stage 底部那行说明：跟键盘拉开距离，压在预览区最底、水平居中 */
+  .page-foot{margin-top:auto;padding:26px 0 2px;
+    font-family:var(--mono);font-size:9px;letter-spacing:.02em;color:#5E5E5A;text-align:center}
+
+  /* 键盘预览下方的「上一步 / 下一步」 */
+  .undo-bar{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px}
+  .undo-bar .btn{height:27px;padding:0 14px;font-size:11px}
+  .undo-bar .btn:disabled{opacity:.32;cursor:default}
+  .undo-bar .cnt{font-family:var(--mono);font-size:9.5px;color:var(--muted);min-width:52px;text-align:center}
+
+  /* 面板本体：真机比例 1272×1057 */
+  .panel{position:relative;width:100%;aspect-ratio:1272/1057;container-type:inline-size;
+    background:var(--tint);border-radius:var(--panelradius,4cqw);
+    backdrop-filter:blur(var(--blurpx)) saturate(1.06);-webkit-backdrop-filter:blur(var(--blurpx)) saturate(1.06);
+    box-shadow:0 -18px 52px rgba(0,0,0,.55);overflow:hidden;color:var(--text)}
+  .panel::after{content:"";position:absolute;left:0;right:0;top:0;z-index:-1;
+    height:calc(var(--glowpx,0) * 0.0786cqw);
+    border:calc(var(--gloww,2) * 0.0786cqw) solid transparent;box-sizing:border-box;
+    background:linear-gradient(180deg,rgba(255,255,255,var(--glowa,0)) 0%,rgba(255,255,255,0) 100%) border-box;
+    -webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    border-radius:var(--panelradius,4cqw) var(--panelradius,4cqw) 0 0;pointer-events:none}
+  .panel .k{position:absolute;border:0;padding:0;background:var(--keybg);color:var(--text);
+    border-radius:var(--keyradius,1.9cqw);display:grid;place-items:center;cursor:pointer;user-select:none;
+    font-size:3.5cqw;font-weight:500;transition:filter .08s;overflow:hidden;line-height:1;
+    box-shadow:0 var(--shadowdy,0cqw) var(--shadowblur,0cqw) var(--shadowcolor,transparent)}
+  /* 高光描边：只保留内侧一圈，中心必须完全挖空（用长写法，避免 mask 简写把合成模式重置掉） */
+  .panel .k::after{content:"";position:absolute;inset:0;border-radius:inherit;
+    background:var(--rimgrad,none);padding:var(--rimw,0cqw);
+    -webkit-mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000);
+    -webkit-mask-clip:border-box,content-box;
+    -webkit-mask-composite:xor;
+    mask-image:linear-gradient(#000,#000),linear-gradient(#000,#000);
+    mask-clip:border-box,content-box;
+    mask-composite:exclude;
+    opacity:var(--rima,0);pointer-events:none}
+  .panel .k:hover{filter:brightness(.97)}
+  .panel .k.press{filter:brightness(.9)}
+  .panel .k.fn{background:var(--keybg)}
+  .panel .k.sym{font-size:4.1cqw}
+  .panel .k.strip{padding:0}
+  .panel .pstrip{display:grid;grid-template-rows:repeat(4,1fr);width:100%;height:100%;font-size:2.7cqw}
+  .panel .pstrip span{display:grid;place-items:center}
+  .panel .pstrip span+span{box-shadow:inset 0 1px 0 rgba(128,128,135,.28)}
+  .panel .k.accent{background:var(--accent);color:#fff}
+  .panel .k.round{border-radius:50%}
+  .panel .k.t9{font-size:3.7cqw;font-weight:400;letter-spacing:.01em}
+  .panel .k.t9 .digit{position:absolute;top:1.5cqw;right:2.4cqw;font-size:1.95cqw;font-weight:400;color:var(--textSmall)}
+  .panel .k.k26{font-size:4.6cqw;font-weight:400;letter-spacing:.02em}
+  .panel .k.k26 .sup{position:absolute;top:1.2cqw;left:1.9cqw;font-size:1.95cqw;font-weight:400;color:var(--textSmall);letter-spacing:0}
+  .panel .punct{font-size:2.7cqw;line-height:1.15}
+  .panel .punct.dot{font-size:2.7cqw}
+  .panel .k > svg{width:46%;height:46%;display:block}
+  .panel .mi{display:block}
+  .panel .mi svg{width:100%;height:100%;display:block}
+  .panel .k .mi{width:100%;height:100%}
+  .panel .k .mi.emoji{width:44%;height:44%}
+  .panel .k .mi.clip{width:50%;height:50%}
+  .panel .k .mi.chev{width:40%;height:40%}
+  .panel .footico .mi{width:5.2cqw;height:5.2cqw}
+  /* 中 / 英 切换图标：以键心为锚，尺寸与位置两套布局完全一致（cqw 相对整块面板） */
+  .panel .cn.mi{position:absolute;left:50%;top:50%;width:7cqw;height:7cqw;margin:-4.2cqw 0 0 -4.2cqw;color:var(--text)}
+  .panel .en.mi{position:absolute;left:50%;top:50%;width:4.2cqw;height:4.2cqw;margin:-0.9cqw 0 0 -0.9cqw;color:var(--textSmall)}
+  .panel .logo{background:var(--logoCircle);color:var(--logoIcon);font-size:5.2cqw;font-weight:800;font-style:italic}
+  .panel .k .mi.brand{width:92%;height:92%}
+  .panel .ico{background:var(--logoCircle);color:var(--fnIcon)}
+  .panel .footico{position:absolute;color:var(--text);opacity:.5;display:grid;place-items:center}
+  .panel .footico svg{width:5.2cqw;height:5.2cqw}
+  .panel .cn{font-size:3.9cqw;line-height:1;position:absolute;left:24%;top:24%}
+  .panel .en{font-size:2.5cqw;color:var(--textSmall);position:absolute;right:22%;bottom:26%}
+  .panel .mic{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.85;color:var(--text);display:grid;place-items:center}
+  .panel .mic svg{width:5.4cqw;height:5.4cqw}
+  .panel .mic img{width:5.4cqw;height:5.4cqw;object-fit:contain;display:block;filter:var(--micFilter, none)}
+  .panel .pad0{position:absolute;top:1.5cqw;right:2.6cqw;font-size:1.95cqw;color:var(--textSmall)}
+
+  .ctrl-head .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted)}
+  .controls .grad-lbl{font-size:10.5px;line-height:1.4;color:var(--muted);letter-spacing:0}
+  .ctrl-head h2{font-size:14px;font-weight:600;margin-top:5px}
+  .ctrl-head p{font-size:10.5px;color:var(--muted);line-height:1.55;margin-top:3px}
+
+  .wheel-wrap{position:relative;width:236px;height:236px;margin:2px auto 6px;touch-action:none;border-radius:50%;
+    box-shadow:0 0 0 1px rgba(255,255,255,.07)}
+  #wheelCanvas{position:absolute;inset:0;width:236px;height:236px;border-radius:50%;display:block}
+  .wheel-ring{position:absolute;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.92);box-shadow:0 0 0 1px rgba(0,0,0,.85),0 2px 8px rgba(0,0,0,.55);pointer-events:none}
+  .wheel-meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+
+  .row{display:grid;grid-template-columns:66px minmax(0,1fr);align-items:center;gap:14px;min-height:36px;padding:3px 0}
+  .row > label{font-size:11.5px;color:#C6C6C0;line-height:1.3}
+  .field{display:flex;align-items:center;gap:12px;min-width:0}
+  .val{font-family:var(--mono);font-size:9.5px;color:var(--muted);width:52px;text-align:right;flex:0 0 52px}
+  .val.editable{cursor:text;border-bottom:1px dashed rgba(255,255,255,.24);position:relative}
+  .val.editable:hover{color:var(--ink);border-bottom-color:rgba(255,255,255,.55)}
+  .val.editing{flex:0 0 52px;width:52px;text-align:center}
+  .val-edit{position:absolute;right:0;top:50%;transform:translateY(-50%);
+    width:70px;height:26px;border:1px solid #6F6F78;border-radius:6px;background:#16161A;
+    color:#F2F2EE;font-family:var(--mono);font-size:11px;text-align:center;line-height:1;
+    padding:0 6px;outline:none;box-sizing:border-box;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.55)}
+  .val-edit:focus{border-color:#23C891;box-shadow:0 0 0 2px rgba(35,200,145,.22),inset 0 1px 3px rgba(0,0,0,.55)}
+
+  input[type="range"]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;height:3px;margin:8px 0;background:var(--line);cursor:pointer;outline:none}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--ink);border:1px solid rgba(0,0,0,.55);border-radius:50%;cursor:pointer}
+  input[type="range"]::-moz-range-thumb{width:12px;height:12px;background:var(--ink);border:1px solid rgba(0,0,0,.55);border-radius:50%}
+
+  .alpha-track{position:relative;flex:1;height:10px;background-color:var(--surface2);
+    background-image:linear-gradient(45deg,#38383C 25%,transparent 25%,transparent 75%,#38383C 75%),
+                      linear-gradient(45deg,#38383C 25%,transparent 25%,transparent 75%,#38383C 75%);
+    background-size:10px 10px;background-position:0 0,5px 5px;display:flex;align-items:center}
+  .alpha-track input{position:relative;z-index:1;height:10px;background:transparent}
+
+  .hexline{display:flex;gap:7px;align-items:center}
+  .hex{flex:1;min-width:0;height:33px;border:1px solid var(--line);background:var(--surface2);padding:0 9px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+  .hex:focus{outline:none;border-color:var(--ink)}
+  .anum{display:flex;align-items:center;border:1px solid var(--line);background:var(--surface2);height:33px;padding:0 8px;gap:2px}
+  .anum input{width:34px;height:31px;border:0;background:transparent;font-family:var(--mono);font-size:11px;text-align:right;outline:none;appearance:textfield;-moz-appearance:textfield}
+  .anum input::-webkit-outer-spin-button,.anum input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .anum span{font-family:var(--mono);font-size:9px;color:var(--muted)}
+
+  .tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line)}
+  .tabs button{height:26px;border:0;background:var(--surface2);font-size:10px;letter-spacing:.1em;cursor:pointer;color:#A6A6A0}
+  .tabs button.on{background:var(--sel);color:var(--ink)}
+  .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px}
+  .num{display:flex;flex-direction:column;gap:3px}
+  .num span{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted)}
+  .num input{height:30px;border:1px solid var(--line);background:var(--surface2);font-family:var(--mono);font-size:10.5px;padding:0 7px;width:100%}
+  .num input:focus{outline:none;border-color:var(--ink)}
+
+  .recents{display:flex;gap:5px;flex-wrap:wrap;min-height:16px}
+  .recent{width:17px;height:17px;border:1px solid rgba(255,255,255,.18);cursor:pointer;padding:0}
+
+  .palette-block{display:flex;flex-direction:column;gap:8px}
+  .palette-name{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--muted)}
+  .swatches{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+  .sw{height:24px;border:1px solid rgba(255,255,255,.14);cursor:pointer;padding:0}
+  .sw:hover{outline:1px solid var(--ink);outline-offset:1px}
+
+  .preset-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .preset{display:flex;align-items:center;gap:6px;padding:0 7px;height:28px;border:1px solid var(--line);
+    background:var(--surface2);cursor:pointer;text-align:left;font-size:10px;color:#D2D2CC}
+  .preset:hover{border-color:var(--ink)}
+  .preset.active{border-color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink)}
+  .preset i{width:13px;height:13px;flex:0 0 13px;border:1px solid rgba(255,255,255,.16)}
+
+  .kv{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:5px}
+  .kv .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted)}
+  .kv .v{font-family:var(--mono);font-size:10.5px;word-break:break-all;line-height:1.45}
+  .cbar{display:flex;align-items:center;justify-content:space-between;font-family:var(--mono);font-size:10px}
+  .cbar .ok{color:#4ADE80}
+  .cbar .bad{color:#F47066}
+
+  .apply-line{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .dot{width:6px;height:6px;background:#4A4A50;flex:0 0 6px}
+  .dot.on{background:#34D399}
+  .apply-line .time{margin-left:auto;color:#5C5C58}
+
+  /* 顶部常驻的连接状态：任何一项调色都能看到手机到底连没连上 */
+  .conn{display:flex;align-items:center;gap:7px;height:27px;padding:0 10px;border:1px solid var(--line2);background:var(--surface2)}
+  .conn .dot{width:7px;height:7px;flex:0 0 7px}
+  .conn.on{border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.10)}
+  .conn .conn-main{font-family:var(--mono);font-size:10px;letter-spacing:.04em;white-space:nowrap}
+  .conn.on .conn-main{color:#34D399}
+  .conn.off .conn-main{color:#FF6B6B}
+  .conn .conn-sub{font-family:var(--mono);font-size:8.5px;color:#5C5C58;white-space:nowrap}
+  .conn.flash{animation:connflash .5s ease}
+  @keyframes connflash{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}100%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
+
+  #bgSection{display:none;flex-direction:column;gap:12px}
+  #bgSection.show{display:flex}
+  .unsynced{padding:9px;border:1px dashed var(--line2);font-size:10px;line-height:1.6;color:var(--muted)}
+
+  /* 主题色：#23C891 全局捕捉 */
+  #accentSection{border-top:1px solid var(--line);padding-top:13px;display:flex;flex-direction:column;gap:9px}
+  .accent-top{display:flex;align-items:center;justify-content:space-between}
+  .accent-top .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted)}
+  .accent-top .btn{height:23px;padding:0 9px;font-size:10px}
+  .accent-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.05em}
+  .accent-head i{width:24px;height:24px;flex:0 0 24px;border:1px solid rgba(0,0,0,.12)}
+  .accent-head .count{margin-left:auto;font-size:9px;color:var(--muted);letter-spacing:.08em}
+  .accent-ladder{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+  .accent-ladder div{display:flex;flex-direction:column;gap:3px}
+  .accent-ladder i{display:block;height:19px;border:1px solid rgba(0,0,0,.12)}
+  .accent-ladder span{font-family:var(--mono);font-size:7.5px;color:var(--muted);letter-spacing:.03em}
+  .accent-ledger{display:flex;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:9px;color:#4A4A45}
+  .accent-ledger b{font-weight:600;margin-left:3px}
+  .accent-tip{font-size:9.5px;line-height:1.6;color:var(--muted)}
+
+  /* 07 按键按下色 */
+  #pressSection{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px}
+  #pressSection .row{min-height:38px}
+  .sw-box{position:relative;width:34px;height:18px;border:1px solid var(--line2);background:var(--surface2);cursor:pointer}
+  .sw-box::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;background:#6E6E68;transition:left .12s}
+  .sw-box.on::after{left:18px;background:var(--ink)}
+  #pressColor{flex:0 0 60px}
+
+  /* 04 顶部高光：和上面几块同一节奏，行与行之间留够高度 */
+  #glowSection{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:10px}
+  #glowSection .row{min-height:38px}
+  #glowSection .accent-tip{margin-top:2px}
+
+  @media (max-width:980px){
+    .layout{grid-template-columns:206px minmax(0,1fr);height:auto}
+    .split{display:none}
+    .controls{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;align-items:start}
+    .stage{min-height:520px}
+  }
+  @media (max-width:760px){
+    .layout{grid-template-columns:1fr}
+    .split{display:none}
+    .targets{border-right:0;border-bottom:1px solid var(--line)}
+  }
+  #rimThemeSeg button{flex:1;height:38px;font-size:12.5px;padding:0}
+  #rimSizeSection{display:none}
+  #rimSizeSection .row:first-child{padding-top:8px}
+  #keyModeSeg{width:100%;margin:0 0 12px}
+  #keyModeSeg button{flex:1;height:30px;font-size:11px}
+  /* 渐变滑块（Photoshop 式）：一条色带 + 可拖动的色标 */
+  .grad-ramp{position:relative;margin:2px 0 14px;touch-action:none}
+  .grad-bar{position:relative;height:34px;border:1px solid var(--line);border-radius:6px;
+    overflow:hidden;cursor:crosshair;
+    background-image:linear-gradient(45deg,#2E2E32 25%,transparent 25%,transparent 75%,#2E2E32 75%),
+                      linear-gradient(45deg,#2E2E32 25%,transparent 25%,transparent 75%,#2E2E32 75%);
+    background-size:12px 12px;background-position:0 0,6px 6px}
+  .grad-fill{position:absolute;inset:0}
+  .grad-handles{position:absolute;left:0;right:0;top:0;height:34px}
+  .grad-handle{position:absolute;top:6px;width:15px;height:15px;margin-left:-7.5px;
+    border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55);cursor:grab}
+  .grad-handle.on{box-shadow:0 0 0 2px #8FB4FF,0 0 0 1px rgba(0,0,0,.55)}
+  .grad-handle:active{cursor:grabbing}
+  .grad-tools{display:flex;align-items:center;gap:8px}
+  .grad-tools .mini{height:24px;padding:0 9px;font-size:10.5px;border-radius:5px;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .grad-tools .mini:active{opacity:.8}
+
+  /* ===== Figma 式调色条（明度 / 透明共用） ===== */
+  .field{position:relative}
+  #vRange,#aRange{-webkit-appearance:none;appearance:none;flex:1;min-width:0;
+    height:24px;margin:6px 0;border-radius:12px;padding:0;outline:none;cursor:pointer;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), 0 1px 0 rgba(0,0,0,.35)}
+  #vRange::-webkit-slider-thumb,#aRange::-webkit-slider-thumb{-webkit-appearance:none;
+    width:20px;height:20px;border-radius:50%;background:#F2F2EE;
+    border:2px solid rgba(0,0,0,.55);
+    box-shadow:0 2px 7px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.28);
+    cursor:grab;transition:transform .12s ease,box-shadow .12s ease}
+  #vRange:active::-webkit-slider-thumb,#aRange:active::-webkit-slider-thumb{
+    cursor:grabbing;transform:scale(1.14);box-shadow:0 3px 10px rgba(0,0,0,.6),0 0 0 3px rgba(143,180,255,.55)}
+  #vRange::-moz-range-thumb,#aRange::-moz-range-thumb{width:18px;height:18px;border-radius:50%;
+    background:#F2F2EE;border:2px solid rgba(0,0,0,.55);cursor:grab}
+  #vRange:focus-visible,#aRange:focus-visible{box-shadow:0 0 0 2px rgba(35,200,145,.5)}
+  .alpha-track{height:24px;border-radius:12px;overflow:hidden}
+  .alpha-track input{height:24px}
+
+  .fx-bubble{position:absolute;bottom:calc(100% + 7px);transform:translateX(-50%);
+    padding:3px 8px;border-radius:6px;background:#131316;color:#F2F2EE;
+    border:1px solid rgba(255,255,255,.18);font-family:var(--mono);font-size:10.5px;
+    white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .1s ease;
+    box-shadow:0 6px 18px rgba(0,0,0,.45);z-index:12}
+  .fx-bubble.show{opacity:1}
+  .fx-bubble::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+    border:4px solid transparent;border-top-color:#131316}
+
+  /* ===== Figma 式渐变色带 ===== */
+  .grad-bar{height:40px;border-radius:7px}
+  .grad-handles{height:40px}
+  .grad-handle{top:11px;width:18px;height:18px;margin-left:-9px;border-width:2px;
+    box-shadow:0 2px 6px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.55);
+    transition:transform .1s ease,box-shadow .1s ease}
+  .grad-handle:hover{transform:scale(1.12)}
+  .grad-handle.on{box-shadow:0 0 0 3px rgba(143,180,255,.92),0 0 0 1px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.5)}
+  .grad-bubble{position:absolute;bottom:calc(100% + 8px);transform:translateX(-50%);
+    padding:3px 8px;border-radius:6px;background:#131316;color:#F2F2EE;
+    border:1px solid rgba(255,255,255,.18);font-family:var(--mono);font-size:10.5px;
+    white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .1s ease;
+    box-shadow:0 6px 18px rgba(0,0,0,.45);z-index:12}
+  .grad-bubble.show{opacity:1}
+  .grad-bubble::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);
+    border:4px solid transparent;border-top-color:#131316}
+
+  /* ===== 自绘右键菜单 ===== */
+  #ctxMenu{position:fixed;z-index:60;min-width:172px;padding:5px;border-radius:9px;
+    background:#1B1B1F;border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 14px 40px rgba(0,0,0,.62);display:none;font-size:11.5px;
+    backdrop-filter:blur(18px)}
+  #ctxMenu.show{display:block}
+  #ctxMenu button{display:flex;width:100%;align-items:center;justify-content:space-between;
+    gap:14px;height:30px;padding:0 9px;border:0;border-radius:6px;background:transparent;
+    color:#E4E4DE;font-size:11.5px;text-align:left;cursor:pointer}
+  #ctxMenu button:hover{background:#2C2C31}
+  #ctxMenu button[disabled]{color:#6B6B70;cursor:default;background:transparent}
+  #ctxMenu button .k{font-family:var(--mono);font-size:9.5px;color:#8B8B92}
+  #ctxMenu .sep{height:1px;margin:4px 2px;background:rgba(255,255,255,.09)}
+  #ctxMenu .cap{padding:5px 9px 4px;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:#8B8B92}
+  body{-webkit-touch-callout:none}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark"></span>
+    <span class="name">WETYPE</span>
+    <span class="slash">/</span>
+    <span class="page">调色台 · 输入法面板</span><span class="tag live" id="buildTag">1119 · 23C891</span>
+    <span class="ver" id="pageVer">build 1119</span>
+  </div>
+  <div class="bar-actions">
+    <div class="conn" id="conn" title="网页与手机之间是靠本地 serve.py + adb 通信的">
+      <span class="dot" id="dotTop"></span>
+      <span class="conn-main" id="connText">未连接手机</span>
+      <span class="conn-sub" id="connSub"></span>
+    </div>
+    <button class="btn ghost" id="reset">复位此项</button>
+    <button class="btn ghost" id="readPhone">读取手机配置</button>
+    <button class="btn ghost" id="import">导入 JSON</button>
+    <button class="btn" id="export">导出 JSON</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <aside class="targets">
+    <div class="side-head">
+      <div class="lbl">主题名称</div>
+      <div class="profiles" id="profiles"></div>
+      <button class="new-profile" id="newProfile" type="button">新建</button>
+      <div class="lbl">02 项目</div>
+    </div>
+    <div class="tlist" id="tlist"></div>
+
+
+    <div class="side-tool">
+      <div class="lbl">话筒图标 · 空格键</div>
+      <div class="drop" id="micDrop">拖入图标 / 点击选择</div>
+      <div class="imgwrap" id="micWrap"><img id="micThumb" alt="话筒图标" style="display:block;width:100%;height:auto;background:transparent"></div>
+      <div class="mic-actions"><button class="btn ghost" id="micReset" type="button">恢复默认话筒</button></div>
+
+      <div class="lbl" style="margin-top:14px">从图片取色</div>
+      <div class="drop" id="drop">拖入图片 / 点击选择</div>
+      <div class="imgwrap" id="imgwrap"><canvas id="imgCanvas" width="96" height="96"></canvas></div>
+      <div class="imgpal" id="imgPal"></div>
+    </div>
+  </aside>
+
+  <div class="split" data-side="left" title="拖动调整左栏宽度，双击恢复默认"></div>
+
+  <section class="stage">
+    <div class="stage-head">
+      <span class="stage-tag"><b id="stageTheme">亮色</b> · <b id="stageTarget">面板背景</b></span>
+      <div class="seg" id="themesSeg">
+        <button data-th="light" class="on">亮色</button>
+        <button data-th="dark">暗色</button>
+        <button data-th="ultra">极暗</button>
+      </div>
+      <div class="seg" id="layoutSeg">
+        <button data-layout="9" class="on">9 键</button>
+        <button data-layout="26">26 键</button>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="panel" id="panel"></div>
+    </div>
+    <div class="undo-bar">
+      <button class="btn" id="undoBtn" type="button" onclick="histGo(-1)">上一步</button>
+      <span class="cnt" id="undoCnt">1 / 1</span>
+      <button class="btn" id="redoBtn" type="button" onclick="histGo(1)">下一步</button>
+    </div>
+    <div class="page-foot">结构按真机截图还原 · 1272×1057 · 键面文字由微信绘制，仅作示意</div>
+  </section>
+
+  <div class="split" data-side="right" title="拖动调整右栏宽度，双击恢复默认"></div>
+
+  <aside class="controls">
+    <div class="ctrl-head">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div>
+          <div class="lbl" id="ctrlTheme">亮色</div>
+          <h2 id="ctrlName">面板背景</h2>
+        </div>
+        <div class="lbl" style="padding-top:3px" id="ctrlBlur">24 dp</div>
+      </div>
+      <p id="ctrlNote">整块面板的底色与模糊</p>
+    </div>
+    <div id="rimPanel" style="display:none">
+      <div class="accent-top">
+        <span class="lbl">高光描边 · 亮色 / 暗色</span>
+        <span class="tag live">实时</span>
+      </div>
+      <div class="seg" id="rimThemeSeg" style="width:100%;margin:0 0 8px">
+        <button data-th="light" class="on">亮色</button>
+        <button data-th="dark">暗色</button>
+      </div>
+    </div>
+
+
+    <div class="seg" id="keyModeSeg" style="display:none">
+      <button data-km="solid" class="on">纯色</button>
+      <button data-km="gradient">渐变</button>
+    </div>
+
+    <div id="gradSection" style="display:none">
+      <div class="lbl grad-lbl" style="margin:0 0 6px">渐变色标（点色带可加，拖圆点改位置）</div>
+      <div class="grad-ramp" id="gradRamp">
+        <div class="grad-bar"><div class="grad-fill" id="gradFill"></div></div>
+        <div class="grad-handles" id="gradHandles"></div>
+        <div class="grad-bubble" id="gradBubble"></div>
+      </div>
+      <div class="row">
+        <label for="gAngle">方向角</label>
+        <div class="field"><input type="range" id="gAngle" min="0" max="360" step="5" value="90"><span class="val" id="gAngleVal">90°</span></div>
+      </div>
+      <div class="row" id="gAlphaRow">
+        <label for="gAlpha">整体透明</label>
+        <div class="field"><input type="range" id="gAlpha" min="0" max="100" step="1" value="100"><span class="val" id="gAlphaVal">100%</span></div>
+      </div>
+      <div class="row">
+        <label for="gPos">色标位置</label>
+        <div class="field grad-tools">
+          <input type="range" id="gPos" min="0" max="100" step="1" value="0" style="flex:1">
+          <span class="val" id="gPosVal">0%</span>
+          <button type="button" class="mini" id="gAdd">+ 色标</button>
+          <button type="button" class="mini" id="gDel">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wheel-wrap" id="wheel">
+      <canvas id="wheelCanvas" width="472" height="472"></canvas>
+      <div class="wheel-ring" id="ring"></div>
+    </div>
+    <div class="wheel-meta"><span>色相 0–360°</span><span>饱和度 由内向外</span></div>
+
+    <div class="row">
+      <label for="vRange">明度</label>
+      <div class="field"><input type="range" id="vRange" min="0" max="100" step="1"><span class="val" id="vVal">0%</span></div>
+    </div>
+
+    <div class="row">
+      <label for="aRange">透明</label>
+      <div class="field">
+        <div class="alpha-track"><input type="range" id="aRange" min="0" max="100" step="1"></div>
+        <span class="val" id="aVal">0%</span>
+      </div>
+    </div>
+
+    <div class="hexline">
+      <input class="hex" id="hex" value="#CAF3BF" spellcheck="false" autocomplete="off" aria-label="十六进制">
+
+    </div>
+
+    <div class="palette-block">
+      <span class="palette-name">色板</span>
+      <div id="palettes"></div>
+    </div>
+
+    <div id="rimSizeSection" style="display:none">
+      <div class="row">
+        <label for="rimPx">描边宽度</label>
+        <div class="field"><input type="range" id="rimPx" min="0" max="6" step="1" value="2"><span class="val" id="rimPxVal">2 px</span></div>
+      </div>
+      <div class="row">
+        <label for="rimAlpha">描边透明</label>
+        <div class="field"><input type="range" id="rimAlpha" min="0" max="100" step="1" value="100"><span class="val" id="rimAlphaVal">100%</span></div>
+      </div>
+      <div class="row">
+        <label for="rimBlur">描边模糊</label>
+        <div class="field"><input type="range" id="rimBlur" min="0" max="8" step="0.5" value="0"><span class="val" id="rimBlurVal">0 px</span></div>
+      </div>
+      <div class="accent-tip">描边只贴在按键内侧：色带决定沿方向角的颜色与中间透明度，0 px 即关闭。候选栏、面板、圆底功能键都不加。</div>
+    </div>
+
+    <div id="bgSection">
+      <div class="row">
+        <label for="pradius">面板圆角</label>
+        <div class="field"><input type="range" id="pradius" min="0" max="40" step="1" value="24"><span class="val" id="pradiusVal">24 dp</span></div>
+      </div>
+      <div class="row">
+        <label for="blur">模糊半径</label>
+        <div class="field"><input type="range" id="blur" min="0" max="40" step="1" value="24"><span class="val" id="blurVal">24 dp</span></div>
+      </div>
+      <div class="preset-list" id="presets"></div>
+      <div class="apply-line"><span class="dot" id="dot"></span><span id="applyText">本地预览</span><span class="time" id="applyTime"></span></div>
+    </div>
+
+    <div id="radiusSection">
+      <div class="row">
+        <label for="kradius">按键圆角</label>
+        <div class="field"><input type="range" id="kradius" min="0" max="40" step="1" value="14"><span class="val" id="kradiusVal">14 dp</span></div>
+      </div>
+      <div class="unsynced" style="display:block;background:rgba(76,141,255,.12);color:#8FB4FF">
+        亮色 / 暗色 / 极暗 共用这一份，改一次三套同步。
+      </div>
+    </div>
+
+    <div id="candSection" style="display:none">
+      <div class="row">
+        <label for="cradius">候选框圆角</label>
+        <div class="field"><input type="range" id="cradius" min="0" max="40" step="1" value="8"><span class="val" id="cradiusVal">8 dp</span></div>
+      </div>
+      <div class="unsynced" style="display:block;background:rgba(76,141,255,.12);color:#8FB4FF">
+        只作用于首位高亮候选词背后那层底框，同样三套主题共用。
+      </div>
+    </div>
+
+    <div class="unsynced" id="unsynced">这一项目前只在页面里预览，还没有接到模块的实时下发。</div>
+
+    <div id="accentSection">
+      <div class="accent-top">
+        <span class="lbl">03 主题色 · APK 全局</span>
+        <button class="btn ghost" id="jumpAccent" type="button">去调色</button>
+      </div>
+      <div class="accent-head">
+        <i id="accentChip"></i>
+        <span id="accentHex">#FF23C891</span>
+        <span class="count">71 处</span>
+      </div>
+      <div class="accent-ladder" id="accentLadder"></div>
+      <div class="accent-ledger">
+        <span>colors.xml<b>16</b></span>
+        <span>drawable<b>52</b></span>
+        <span>代码<b>3</b></span>
+        <span>合计<b>71</b></span>
+      </div>
+      <div class="accent-tip">模块在 :hld 进程按 RGB 精确匹配 #23C891，替换成这个主题色并保留原 alpha，五档透明底一起走。</div>
+    </div>
+
+    <div id="glowSection">
+      <div class="accent-top">
+        <span class="lbl">04 顶部高光</span>
+        <span class="tag live">实时</span>
+      </div>
+      <div class="row">
+        <label for="glowAlpha">透明度</label>
+        <div class="field"><input type="range" id="glowAlpha" min="0" max="100" step="1" value="100"><span class="val" id="glowAlphaVal">100%</span></div>
+      </div>
+      <div class="row">
+        <label for="glowPx">渐变长度</label>
+        <div class="field"><input type="range" id="glowPx" min="0" max="120" step="1" value="30"><span class="val" id="glowPxVal">30 px</span></div>
+      </div>
+      <div class="row">
+        <label for="glowW">描边粗细</label>
+        <div class="field"><input type="range" id="glowW" min="0" max="8" step="0.5" value="2"><span class="val" id="glowWVal">2 px</span></div>
+      </div>
+      <div class="accent-tip">沿面板上边缘的一条描边（不是填充）：顶部纯白 → N px 处全透明，圆角处自然淡出。<br>网页预览不画这条描边，改完直接看手机。</div>
+    </div>
+
+    <div id="pressSection">
+      <div class="accent-top">
+        <span class="lbl">按键按下色</span>
+        <span class="tag live">三套独立</span>
+      </div>
+      <div id="pressRows"></div>
+      <div class="accent-tip">三套互不影响；关掉 = 不接管，回落宿主自己的按下态。发送 / 完成键不接管。</div>
+    </div>
+
+    <div id="shadowSection">
+      <div class="accent-top">
+        <span class="lbl">06 按键投影</span>
+        <span class="tag live">实时</span>
+      </div>
+      <div class="row">
+        <label for="shColor">颜色</label>
+        <div class="field">
+          <input type="color" id="shColor" value="#000000">
+          <span class="val" id="shColorVal">000000</span>
+        </div>
+      </div>
+      <div class="row">
+        <label for="shBlur">模糊半径</label>
+        <div class="field"><input type="range" id="shBlur" min="0" max="24" step="1" value="6"><span class="val" id="shBlurVal">6 dp</span></div>
+      </div>
+      <div class="row">
+        <label for="shAlpha">透明度</label>
+        <div class="field"><input type="range" id="shAlpha" min="0" max="100" step="1" value="20"><span class="val" id="shAlphaVal">20%</span></div>
+      </div>
+      <div class="row">
+        <label for="shDy">Y 下移</label>
+        <div class="field"><input type="range" id="shDy" min="0" max="24" step="1" value="3"><span class="val" id="shDyVal">3 dp</span></div>
+      </div>
+      <div class="accent-tip">只给按键加，候选栏 / 面板 / logo 不受影响；宿主自带阴影保持关闭。</div>
+    </div>
+    <div id="sendSection" style="display:none">
+      <div class="accent-top">
+        <span class="lbl">07 发送键 · 状态配色</span>
+        <span class="tag live">实时</span>
+      </div>
+      <div id="sendSwatches" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:2px 0 12px"></div>
+      <div class="row">
+        <label for="sendAText">可发送文字</label>
+        <div class="field"><input type="color" id="sendAText" value="#ffffff"><span class="val" id="sendATextVal">FFFFFF</span></div>
+      </div>
+      <div class="row">
+        <label for="sendGBg">灰色键面</label>
+        <div class="field"><input type="color" id="sendGBg" value="#b7bcc4"><span class="val" id="sendGBgVal">B7BCC4</span></div>
+      </div>
+      <div class="row">
+        <label for="sendGText">灰色文字</label>
+        <div class="field"><input type="color" id="sendGText" value="#000000"><span class="val" id="sendGTextVal">000000</span></div>
+      </div>
+      <div class="row">
+        <label for="sendDBg">禁用键面</label>
+        <div class="field"><input type="color" id="sendDBg" value="#b7bcc4"><span class="val" id="sendDBgVal">B7BCC4</span></div>
+      </div>
+      <div class="row">
+        <label for="sendDText">禁用文字</label>
+        <div class="field"><input type="color" id="sendDText" value="#000000"><span class="val" id="sendDTextVal">000000</span></div>
+      </div>
+      <div class="row">
+        <label for="sendDAlpha">禁用文字透明</label>
+        <div class="field"><input type="range" id="sendDAlpha" min="0" max="100" step="1" value="20"><span class="val" id="sendDAlphaVal">20%</span></div>
+      </div>
+      <div class="row">
+        <label for="sendMask">按下遮罩</label>
+        <div class="field"><input type="range" id="sendMask" min="0" max="100" step="1" value="100"><span class="val" id="sendMaskVal">100%</span></div>
+      </div>
+      <div class="accent-tip">可发送：键面跟随「主题色」，不可单独改。下面只配灰色 / 禁用两态（键面 + 文字），0% 遮罩＝按下完全不叠色。</div>
+    </div>
+
+  </aside>
+
+</main>
+
+
+<script>window.WT_ICONS={"icon_keys_emoji":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><path d=\"M58.337,32.002C58.337,17.457 46.546,5.667 32.002,5.667C17.457,5.667 5.667,17.457 5.667,32.002C5.667,46.546 17.457,58.337 32.002,58.337C46.546,58.337 58.337,46.546 58.337,32.002ZM9.547,32.002C9.547,19.601 19.6,9.548 32.001,9.548C44.402,9.548 54.455,19.601 54.455,32.002C54.455,44.403 44.402,54.456 32.001,54.456C19.6,54.456 9.547,44.403 9.547,32.002Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M44.509,35.557L44.246,35.294H19.754L19.491,35.557V37.269L19.504,37.841C19.803,44.484 25.283,49.778 32,49.778C38.908,49.778 44.509,44.177 44.509,37.269V35.557ZM40.326,39.244L40.241,39.595C39.221,43.234 35.875,45.827 32.001,45.827L31.524,45.814L31.027,45.773C27.571,45.383 24.693,42.916 23.76,39.586L23.671,39.244H40.326Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M21.467,29.368C19.285,29.368 17.517,27.6 17.517,25.418C17.517,23.236 19.285,21.468 21.467,21.468C23.649,21.468 25.417,23.236 25.417,25.418C25.417,27.6 23.649,29.368 21.467,29.368Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/><path d=\"M42.536,29.368C40.354,29.368 38.585,27.6 38.585,25.418C38.585,23.236 40.354,21.468 42.536,21.468C44.717,21.468 46.486,23.236 46.486,25.418C46.486,27.6 44.717,29.368 42.536,29.368Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/></svg>","icon_custom_toolbar_clipboard":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"36.85 32 47.3 55.9\"><path d=\"M43,39.52C41.98,39.52 41.15,40.35 41.15,41.37V81.75C41.15,82.77 41.98,83.6 43,83.6H78C79.02,83.6 79.85,82.77 79.85,81.75V41.37C79.85,40.35 79.02,39.52 78,39.52H72.72V35.22H78C81.4,35.22 84.15,37.98 84.15,41.37V81.75C84.15,85.15 81.4,87.9 78,87.9H43C39.6,87.9 36.85,85.15 36.85,81.75V41.37C36.85,37.98 39.6,35.22 43,35.22H48.28V39.52H43Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M52.58,36.3V39.43H68.42V36.3H52.58ZM50.28,32C49.18,32 48.28,32.9 48.28,34V41.73C48.28,42.83 49.18,43.73 50.28,43.73H70.72C71.82,43.73 72.72,42.83 72.72,41.73V34C72.72,32.9 71.82,32 70.72,32H50.28Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M72.72,55.45H49.26V51.15H72.72V55.45Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M72.72,65.23H49.26V60.93H72.72V65.23Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/><path d=\"M65.87,75H49.26V70.7H65.87V75Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/></svg>","icon_custom_toolbar_hide_keyboard":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"38.34 53.15 43.32 25.93\"><path d=\"M81.66,54.08C82.59,55 82.59,56.5 81.66,57.42L60,79.08L38.34,57.42C37.41,56.5 37.41,55 38.34,54.08V54.08C39.25,53.17 40.72,53.15 41.65,54.04L60,71.69L78.35,54.04C79.28,53.15 80.75,53.17 81.66,54.08V54.08Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/></svg>","icon_quick_switch_chinese":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\" width=\"64\" height=\"64\"><path d=\"M30.303,8.283H30.053V8.533V16.507H13.947H13.697V16.757V38.232V38.482H13.947H17.236H17.486V38.232V35.603H30.053V50.933V51.183H30.303H33.685H33.935V50.933V35.603H46.548V38.232V38.482H46.798H50.087H50.337V38.232V16.757V16.507H50.087H33.935V8.533V8.283H33.685H30.303ZM17.486,31.905V20.206H30.053V31.905H17.486ZM33.935,31.905V20.206H46.548V31.905H33.935Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/></svg>","icon_quick_switch_english":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><path d=\"M30.17,20.136H29.92V20.386V24.498H17.488H17.238V24.748V35.426H11.866H11.616V35.676V38.69V38.94H11.866H27.609C27.154,39.825 26.6,40.678 25.975,41.499C23.323,44.499 18.66,46.909 11.845,48.792L11.523,48.881L11.699,49.165L13.453,51.998L13.551,52.157L13.732,52.108C20.636,50.212 25.636,47.496 28.694,44.027L28.694,44.027L28.7,44.02C29.898,42.555 30.923,40.876 31.732,38.94H32.389C34.813,44.542 40.812,48.887 50.328,52.104L50.518,52.168L50.622,51.997L52.376,49.118L52.546,48.839L52.232,48.748C43.951,46.351 38.614,43.082 36.134,38.94H51.803H52.053V38.69V35.676V35.426H51.803H46.341V24.748V24.498H46.091H33.749V20.386V20.136H33.499H30.17ZM33.749,29.11V28.011H42.693V35.426H32.917C33.373,33.515 33.662,31.438 33.748,29.12L33.749,29.12V29.11ZM12.091,14.019H11.841V14.269V17.237V17.487H12.091H22.32V21.645V21.895H22.57H25.898H26.148V21.645V17.487H37.521V21.645V21.895H37.771H41.099H41.349V21.645V17.487H51.578H51.828V17.237V14.269V14.019H51.578H41.349V10.267V10.017H41.099H37.771H37.521V10.267V14.019H26.148V10.267V10.017H25.898H22.57H22.32V10.267V14.019H12.091ZM20.886,35.426V28.011H29.92V29.105C29.834,31.357 29.537,33.477 28.992,35.426H20.886Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/></svg>","icon_toolbar_sticker":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"9.2 12.1 45.6 40.5\"><path d=\"M26.331,20.527C26.331,20.517 26.332,20.509 26.332,20.5C26.332,20.491 26.331,20.482 26.331,20.473C21.77,20.206 18.126,16.563 17.86,12.001C17.851,12.001 17.842,12 17.833,12C17.823,12 17.815,12.001 17.806,12.001C17.539,16.563 13.895,20.206 9.334,20.473C9.334,20.482 9.333,20.491 9.333,20.5C9.333,20.509 9.334,20.517 9.334,20.527C13.895,20.793 17.539,24.437 17.806,28.998C17.815,28.998 17.823,28.999 17.833,28.999C17.842,28.999 17.851,28.998 17.86,28.998C18.126,24.437 21.77,20.793 26.331,20.527ZM31.999,40.332C35.65,40.332 38.61,37.373 38.61,33.721C38.61,30.07 35.65,27.111 31.999,27.111C28.348,27.111 25.388,30.07 25.388,33.721C25.388,37.373 28.348,40.332 31.999,40.332ZM46.165,19.555C44.078,19.555 42.387,21.247 42.387,23.333C42.387,25.419 44.078,27.111 46.165,27.111C48.251,27.111 49.943,25.419 49.943,23.333C49.943,21.247 48.251,19.555 46.165,19.555ZM43.248,42.502C42.329,41.96 41.198,42.383 40.717,43.438C40.628,43.634 38.453,48.248 32.012,48.258C25.57,48.248 23.396,43.625 23.316,43.448C22.852,42.373 21.721,41.933 20.789,42.469C19.858,43.004 19.478,44.31 19.941,45.385C20.068,45.68 23.144,52.588 31.992,52.609H32.031C40.878,52.588 43.954,45.692 44.082,45.398C44.542,44.331 44.168,43.045 43.248,42.502ZM54.53,17.557C54.442,17.369 52.309,12.958 46.179,12.945H46.151C40.02,12.958 37.888,17.377 37.799,17.566C37.478,18.254 37.742,19.089 38.387,19.431C39.033,19.774 39.817,19.493 40.138,18.805C40.194,18.692 41.701,15.734 46.165,15.728C50.629,15.734 52.136,18.686 52.198,18.811C52.531,19.486 53.315,19.757 53.952,19.41C54.59,19.063 54.849,18.24 54.53,17.557Z\" fill=\"currentColor\" fill-rule=\"nonzero\"/></svg>","icon_logo_grey":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 96\"><path d=\"M48,48m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0\" fill=\"#ffffff\" fill-opacity=\"0.9\" fill-rule=\"nonzero\"/><path d=\"M61.772,26.55C60.567,26.55 59.509,27.352 59.183,28.513L58.003,32.722C57.745,33.642 58.436,34.553 59.391,34.553V34.553C65.454,34.553 68.414,36.495 66.874,41.988C66.864,42.022 66.855,42.055 66.845,42.089C65.693,46.084 61.195,49.212 57.015,49.212H48.094L50.618,40.206L52.204,34.553L53.491,29.965C53.972,28.25 52.683,26.55 50.901,26.55H45.901C44.695,26.55 43.637,27.352 43.311,28.513L37.507,49.212H23.897C22.691,49.212 21.633,50.014 21.307,51.175L20.308,54.737C19.827,56.452 21.116,58.153 22.897,58.153H35L31.268,71.457C30.787,73.173 32.076,74.873 33.857,74.873H38.858C40.063,74.873 41.121,74.071 41.447,72.91L45.586,58.153H55.05H55.328C66.079,57.67 75.078,50.863 76.542,42.042C77.944,33.593 74.674,27.024 64.438,26.55H61.772Z\" fill=\"#777777\" fill-rule=\"evenodd\"/></svg>","icon_logo_p":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 96\"><path d=\"M61.772,26.55C60.567,26.55 59.509,27.352 59.183,28.513L58.003,32.722C57.745,33.642 58.436,34.553 59.391,34.553V34.553C65.454,34.553 68.414,36.495 66.874,41.988C66.864,42.022 66.855,42.055 66.845,42.089C65.693,46.084 61.195,49.212 57.015,49.212H48.094L50.618,40.206L52.204,34.553L53.491,29.965C53.972,28.25 52.683,26.55 50.901,26.55H45.901C44.695,26.55 43.637,27.352 43.311,28.513L37.507,49.212H23.897C22.691,49.212 21.633,50.014 21.307,51.175L20.308,54.737C19.827,56.452 21.116,58.153 22.897,58.153H35L31.268,71.457C30.787,73.173 32.076,74.873 33.857,74.873H38.858C40.063,74.873 41.121,74.071 41.447,72.91L45.586,58.153H55.05H55.328C66.079,57.67 75.078,50.863 76.542,42.042C77.944,33.593 74.674,27.024 64.438,26.55H61.772Z\" fill=\"currentColor\" fill-rule=\"evenodd\"/></svg>"};</script>
+<script>
+/* ============================================================
+   数据：3 主题 × 5 项目
+   ============================================================ */
+const THEMES = [
+  { id:"light", name:"亮色" },
+  { id:"dark",  name:"暗色" },
+  { id:"ultra", name:"极暗" }
+];
+
+const ITEMS = [
+  { id:"panel",  name:"面板背景", desc:"整块面板的底色与模糊", synced:true },
+  { id:"logoIcon",  name:"Logo 图标", desc:"左上角 logo 图形的颜色", synced:true },
+  { id:"logoCircle",name:"Logo 圆底", desc:"logo 背后那个圆的颜色", synced:true },
+  { id:"fnIcon",   name:"功能键图标色", desc:"候选栏右侧功能键圆底里的图标", synced:true },
+  { id:"key",    name:"按键颜色", desc:"除大发送键外的所有按键（数字、字母、符号、标点长条、空格、删除…）", synced:true },
+  { id:"keyrim", name:"按键高光描边", desc:"只贴在按键内侧的一圈渐变描边，亮色 / 暗色各调一份", synced:true },
+  { id:"send",   name:"发送键", desc:"右下角大键：可发送键面跟随主题色，这里只配灰色 / 禁用两态", synced:true },
+  { id:"text",   name:"字符颜色", desc:"键帽上的大字（数字 / 字母 / 汉字），发送键除外；亮色与暗色都生效", synced:true },
+  { id:"smallText", name:"小字颜色", desc:"键帽右上角的角标小字：T9 数字、英文、标点符号", synced:true },
+  { id:"fnText", name:"复制粘贴颜色", desc:"下滑手势绑在按键下方的小字（全选 / 剪切 / 复制 / 粘贴…）", synced:true },
+  { id:"accent", name:"主题色",   desc:"APK 内全部 #23C891（71 处）统一走这个色", synced:true },
+  { id:"candBg", name:"高亮候选框", desc:"候选栏首位那颗高亮候选词背后的底框", synced:true }
+];
+
+/* 「面板背景 / Logo / 按键颜色 / 主题色」改动会实时下发到手机；
+   其余项仍然只是本地预览（模块暂未接管）。 */
+const SYNC_ITEMS = ["panel", "logoIcon", "logoCircle", "fnIcon", "key", "keyrim", "send", "text", "smallText", "fnText", "accent", "candBg"];
+
+const C = (h,s,v,alpha) => ({ h, s, v, alpha });
+const DEFAULT_DATA = {
+  light: {
+    panel:  C(107.3,.214,.953,92),
+    logoIcon:   C(160,.825,.784,100),
+    logoCircle: C(0,0,1,100),
+    fnIcon:     C(0,0,.42,100),
+    key:    C(0,0,1,100),
+    text:   C(0,0,.078,100),
+    smallText: C(0,0,.30,100),
+    fnText: C(0,0,.078,69),
+    accent: C(160,.825,.784,100),
+    send:   C(160,.825,.784,100),
+    candBg: C(160,.825,.784,20)
+  },
+  dark: {
+    panel:  C(240,.08,.10,90),
+    logoIcon:   C(160,.796,.827,100),
+    logoCircle: C(0,0,1,14),
+    fnIcon:     C(0,0,.72,100),
+    key:    C(0,0,1,10),
+    text:   C(60,.03,.94,100),
+    smallText: C(60,.02,.72,100),
+    fnText: C(60,.03,.94,69),
+    accent: C(160,.825,.784,100),
+    send:   C(160,.825,.784,100),
+    candBg: C(160,.825,.784,20)
+  },
+  ultra: {
+    panel:  C(0,0,.02,94),
+    logoIcon:   C(160,.85,.727,100),
+    logoCircle: C(0,0,1,8),
+    fnIcon:     C(0,0,.86,100),
+    key:    C(0,0,1,6),
+    text:   C(60,.04,.90,100),
+    smallText: C(60,.02,.70,100),
+    fnText: C(60,.04,.90,69),
+    accent: C(160,.825,.784,100),
+    send:   C(160,.825,.784,100),
+    candBg: C(160,.825,.784,20)
+  }
+};
+const BLUR = { light:24, dark:28, ultra:32 };
+/* 形状参数（按键圆角 / 候选框圆角 / 面板圆角）不属于某个主题：
+   一改就三套模式同步，导出时写在调色板根节点上 */
+const RADIUS = { light:14, dark:14, ultra:14 };
+const CAND_RADIUS = { light:8, dark:8, ultra:8 };
+let PANEL_RADIUS = 24;
+/* 自定义话筒图标（空格键那颗）：用户上传的 data URL，null = 用宿主默认 */
+let MIC_ICON = null;
+/* 按键投影：颜色 / 模糊半径(dp) / 透明度(%) / Y 轴下移(dp)，只作用于按键 */
+const SHADOW = {
+  light:{ color:"#000000", blur:6, alpha:18, dy:3 },
+  dark: { color:"#000000", blur:8, alpha:30, dy:4 },
+  ultra:{ color:"#000000", blur:8, alpha:38, dy:4 }
+};
+/* 面板顶部高光：透明度(%) + 渐变长度(px) + 描边可见粗细(px) */
+const GLOW = {
+  light:{ alpha:100, px:30, w:2 },
+  dark: { alpha:100, px:30, w:2 },
+  ultra:{ alpha:100, px:30, w:2 }
+};
+/* 发送键三态：可发送键面跟本项色轮；下面是文字与灰/禁用专用色 */
+const SEND = {
+  light:{ aText:"#FFFFFF", gBg:"#B7BCC4", gText:"#000000", dBg:"#B7BCC4", dText:"#000000", dAlpha:20, mask:100 },
+  dark: { aText:"#FFFFFF", gBg:"#414141", gText:"#FFFFFF", dBg:"#414141", dText:"#FFFFFF", dAlpha:20, mask:100 },
+  ultra:{ aText:"#FFFFFF", gBg:"#414141", gText:"#FFFFFF", dBg:"#414141", dText:"#FFFFFF", dAlpha:20, mask:100 }
+};
+/* 两个「小字」项是否已单独配色：false = 不下发，让模块回落到「字符颜色」。
+   用户一旦在这两项里动过颜色，就置 true，变成独立配色。 */
+const INDEP = {
+  light: { small:true, fn:true },
+  dark:  { small:true, fn:true },
+  ultra: { small:true, fn:true }
+};
+
+/* 按键高光描边宽度（px，0 = 关闭），只作用于按键 */
+const RIM = { light:2, dark:2, ultra:2 };
+
+/* 按键按下色：亮色 / 暗色 / 极暗各一份，各自开关与颜色（发送 / 完成键模块里排除） */
+const PRESS = {
+  light:{ on:true,  color:"#EDEDED" },
+  dark: { on:true,  color:"#3A3A3A" },
+  ultra:{ on:true,  color:"#3A3A3A" }
+};
+/* 按键高光描边的透明度（%），只影响描边本身 */
+const RIM_A = { light:100, dark:100, ultra:100 };
+/* 描边的高斯模糊（px）：模糊结果会被裁在按键轮廓内，不会糊出键外 */
+const RIM_BLUR = { light:0, dark:0, ultra:0 };
+
+/* 按键高光描边 = 一圈线性渐变描边（多色标 + 方向角 + 整体透明），亮色 / 暗色各一份 */
+const RIMGRAD = {
+  light: { stops:[{p:0,c:C(0,0,1,100)}, {p:.5,c:C(0,0,1,0)}, {p:1,c:C(0,0,1,100)}], angle:90, alpha:100 },
+  dark:  { stops:[{p:0,c:C(0,0,1,100)}, {p:.5,c:C(0,0,1,0)}, {p:1,c:C(0,0,1,100)}], angle:90, alpha:100 },
+  ultra: { stops:[{p:0,c:C(0,0,1,100)}, {p:.5,c:C(0,0,1,0)}, {p:1,c:C(0,0,1,100)}], angle:90, alpha:100 }
+};
+
+let data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+let activeTheme = 0, activeItem = 0, layout = 9, mode = "rgb", online = false, recents = [];
+let deviceSerial = "", lastSerial = "", lastApplyAt = "";
+
+const curTheme = () => THEMES[activeTheme];
+const curItem = () => ITEMS[activeItem];
+
+/* 按键颜色：纯色 / 渐变（渐变时有起点、终点两个色标 + 角度） */
+const KEYMODE = { light:"solid", dark:"solid", ultra:"solid" };
+/* 渐变改成 Photoshop 式多色标：stops = [{p:0..1, c:{h,s,v,alpha}}, …]，至少两个，
+   真机侧用 LinearGradient 多色标复现；老配置里的 c1/c2 仍会被读成 0% / 100% 两个色标 */
+const KEYGRAD = {
+  light: { stops:[{p:0, c:C(0,0,1,100)}, {p:1, c:C(0,0,.85,100)}], angle:90, alpha:100 },
+  dark:  { stops:[{p:0, c:C(0,0,1,100)}, {p:1, c:C(0,0,.85,100)}], angle:90, alpha:100 },
+  ultra: { stops:[{p:0, c:C(0,0,1,100)}, {p:1, c:C(0,0,.85,100)}], angle:90, alpha:100 }
+};
+let gradStop = 0;          // 当前选中的色标下标
+const sortedStopsFor = (tid) => [...KEYGRAD[tid].stops].sort((a,b) => a.p - b.p);
+/* 在某位置取渐变的插值色（用于「点色带加色标」） */
+function sampleGradient(p){
+  const st = sortedStops();
+  if (p <= st[0].p) return { ...st[0].c };
+  if (p >= st[st.length-1].p) return { ...st[st.length-1].c };
+  for (let i = 1; i < st.length; i++){
+    if (p <= st[i].p){
+      const a = st[i-1], b = st[i];
+      const t = (p - a.p) / Math.max(1e-6, b.p - a.p);
+      const ra = hsv2rgb(a.c.h, a.c.s, a.c.v), rb = hsv2rgb(b.c.h, b.c.s, b.c.v);
+      const r = ra.map((x, k) => Math.round(x + (rb[k] - x) * t));
+      const c = rgb2hsv(r[0], r[1], r[2]);
+      return { h:c.h, s:c.s, v:c.v, alpha: Math.round(a.c.alpha + (b.c.alpha - a.c.alpha) * t) };
+    }
+  }
+  return { ...st[st.length-1].c };
+}
+const isRimItem = () => curItem().id === "keyrim";
+/* 渐变编辑器复用同一套色带 UI：按键颜色走 KEYGRAD，高光描边走 RIMGRAD */
+const activeGrad = () => isRimItem() ? RIMGRAD[curTheme().id] : KEYGRAD[curTheme().id];
+const gradStops = () => activeGrad().stops;
+const sortedStops = () => [...gradStops()].sort((a,b) => a.p - b.p);
+/* 任意一份渐变 → CSS */
+function gradCssOf(g, degShift = 0){
+  const st = [...g.stops].sort((a,b) => a.p - b.p);
+  const ga = (g.alpha ?? 100) / 100;
+  return `linear-gradient(${g.angle + degShift}deg, `
+    + st.map(x => `${rgba({ ...x.c, alpha: Math.round(x.c.alpha * ga) })} ${(x.p * 100).toFixed(1)}%`).join(", ") + ")";
+}
+const keyGradCss = (degShift = 0) => {
+  const st = sortedStops();
+  const ga = (KEYGRAD[curTheme().id].alpha ?? 100) / 100;
+  return `linear-gradient(${KEYGRAD[curTheme().id].angle + degShift}deg, `
+    + st.map(x => `${rgba({ ...x.c, alpha: Math.round(x.c.alpha * ga) })} ${(x.p * 100).toFixed(1)}%`).join(", ") + ")";
+};
+
+/* 导入 JSON 走「全量覆盖」：先把所有参数打回出厂默认，再套用文件里的值，
+   文件里没写的项就是默认值，而不是保留你手调过的旧值。PRISTINE 在 load() 之前采样，
+   所以它一定是刚启动时的出厂状态。 */
+const PRISTINE = JSON.stringify({ data, blur:BLUR, radius:RADIUS, candRadius:CAND_RADIUS,
+  panelRadius:PANEL_RADIUS, rim:RIM, rimAlpha:RIM_A, rimBlur:RIM_BLUR, rimGrad:RIMGRAD, send:SEND,
+  keyMode:KEYMODE, keyGrad:KEYGRAD, shadow:SHADOW, glow:GLOW, press:PRESS, indep:INDEP, micIcon:MIC_ICON });
+
+function restoreInto(target, src){
+  Object.keys(src).forEach(k => {
+    const v = src[k];
+    if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object"){
+      restoreInto(target[k], v);
+    } else {
+      target[k] = Array.isArray(v) ? JSON.parse(JSON.stringify(v)) : v;
+    }
+  });
+}
+
+function resetAll(){
+  const d = JSON.parse(PRISTINE);
+  restoreInto(data, d.data);
+  restoreInto(BLUR, d.blur);
+  restoreInto(RADIUS, d.radius);
+  restoreInto(CAND_RADIUS, d.candRadius);
+  restoreInto(RIM, d.rim);
+  restoreInto(RIM_A, d.rimAlpha);
+  if (d.rimBlur) restoreInto(RIM_BLUR, d.rimBlur);
+  if (d.rimGrad) restoreInto(RIMGRAD, d.rimGrad);
+  restoreInto(SEND, d.send);
+  restoreInto(KEYMODE, d.keyMode);
+  restoreInto(KEYGRAD, d.keyGrad);
+  restoreInto(SHADOW, d.shadow);
+  restoreInto(GLOW, d.glow);
+  restoreInto(PRESS, d.press);
+  restoreInto(INDEP, d.indep);
+  PANEL_RADIUS = d.panelRadius;
+  MIC_ICON = d.micIcon;
+}
+
+const isKeyGrad = () => curItem().id === "key" && KEYMODE[curTheme().id] === "gradient";
+const isRimGrad = () => isRimItem();
+const curColor = () => (isKeyGrad() || isRimGrad())
+  ? (gradStops()[gradStop] || gradStops()[0]).c
+  : colorOf(curTheme(), curItem());
+/* 「发送键」的可发送键面 = 主题色：两者共用同一份颜色，改哪个都是改主题色 */
+function colorOf(theme, item){
+  if (item.id === "keyrim"){
+    const g = RIMGRAD[theme.id];
+    return ([...g.stops].sort((a,b)=>a.p-b.p)[0] || g.stops[0]).c;
+  }
+  return data[theme.id][item.id === "send" ? "accent" : item.id];
+}
+
+/* ============================================================
+   颜色换算
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const clamp = (v,a,b) => Math.min(b, Math.max(a, v));
+const hex2 = (n) => n.toString(16).padStart(2,"0").toUpperCase();
+
+function hsv2rgb(h,s,v){
+  h = ((h % 360) + 360) % 360;
+  const c = v*s, x = c * (1 - Math.abs((h/60) % 2 - 1)), m = v - c;
+  let r=0,g=0,b=0;
+  if (h < 60){ r=c; g=x; }
+  else if (h < 120){ r=x; g=c; }
+  else if (h < 180){ g=c; b=x; }
+  else if (h < 240){ g=x; b=c; }
+  else if (h < 300){ r=x; b=c; }
+  else { r=c; b=x; }
+  return { r:Math.round((r+m)*255), g:Math.round((g+m)*255), b:Math.round((b+m)*255) };
+}
+function rgb2hsv(r,g,b){
+  const rr=r/255, gg=g/255, bb=b/255;
+  const max=Math.max(rr,gg,bb), min=Math.min(rr,gg,bb), d=max-min;
+  let h=0;
+  if (d > 0){
+    if (max === rr) h = ((gg-bb)/d) % 6;
+    else if (max === gg) h = (bb-rr)/d + 2;
+    else h = (rr-gg)/d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  return { h, s:max === 0 ? 0 : d/max, v:max };
+}
+const rgbOf = (c) => hsv2rgb(c.h, c.s, c.v);
+const hex6 = (c) => { const x = rgbOf(c); return "#" + hex2(x.r)+hex2(x.g)+hex2(x.b); };
+const hex8 = (c) => "#" + hex2(Math.round(c.alpha/100*255)) + hex6(c).slice(1);
+const rgba = (c) => { const x = rgbOf(c); return `rgba(${x.r}, ${x.g}, ${x.b}, ${(c.alpha/100).toFixed(2)})`; };
+
+function lum(r,g,b){
+  const f = (v) => { v/=255; return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); };
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+}
+function ratio(a,b){ const x=Math.max(a,b), y=Math.min(a,b); return (x+0.05)/(y+0.05); }
+function over(r,g,b,a,br,bg,bb){ return { r:Math.round(r*a+br*(1-a)), g:Math.round(g*a+bg*(1-a)), b:Math.round(b*a+bb*(1-a)) }; }
+
+function setFromHex(str, withAlpha){
+  let v = String(str).trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]+$/.test(v)) return false;
+  if (v.length === 3) v = v.split("").map(ch => ch+ch).join("");
+  if (v.length !== 6 && v.length !== 8) return false;
+  let alpha = null;
+  if (v.length === 8){
+    if (withAlpha !== false) alpha = Math.round(parseInt(v.slice(0,2),16)/255*100);
+    v = v.slice(2);
+  }
+  const r = parseInt(v.slice(0,2),16), g = parseInt(v.slice(2,4),16), b = parseInt(v.slice(4,6),16);
+  const hsv = rgb2hsv(r,g,b);
+  const c = curColor();
+  c.h = hsv.h; c.s = hsv.s; c.v = hsv.v;
+  if (alpha !== null) c.alpha = alpha;
+  return true;
+}
+
+/* ============================================================
+   左栏
+   ============================================================ */
+const themesSeg = $("themesSeg");
+if (themesSeg) {
+  themesSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-th]");
+    if (!btn) return;
+    const idx = THEMES.findIndex(t => t.id === btn.dataset.th);
+    if (idx < 0 || idx === activeTheme) return;
+    activeTheme = idx;
+    render(); refreshStatus();
+  });
+}
+
+/* ============================================================
+   左栏主题档案：默认 + 自建，与手机端 theme_profiles 同一套 schema
+   ============================================================ */
+let PROFILES = null, PROFILE_ORDER = ["默认"], activeProfile = "默认";
+const PROFILE_KEY = "wetype-dark.profiles4";
+
+function snapshotProfile(){
+  const p = buildPaletteRaw();
+  delete p.mic_icon;
+  p.blur = { light: BLUR.light, dark: BLUR.dark, ultra: BLUR.ultra };
+  return p;
+}
+function loadProfiles(){
+  try{
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (raw){
+      const o = JSON.parse(raw);
+      if (o && o.profiles && Object.keys(o.profiles).length){
+        PROFILES = o.profiles;
+        PROFILE_ORDER = Array.isArray(o.order) && o.order.length ? o.order : Object.keys(o.profiles);
+        activeProfile = o.active || PROFILE_ORDER[0] || "默认";
+      }
+    }
+  }catch(e){}
+  if (!PROFILES || !Object.keys(PROFILES).length){
+    PROFILES = { "默认": snapshotProfile() };
+    PROFILE_ORDER = ["默认"];
+    activeProfile = "默认";
+  }
+  if (!PROFILE_ORDER.includes("默认")) PROFILE_ORDER = ["默认", ...PROFILE_ORDER];
+  if (!PROFILES[activeProfile]) activeProfile = "默认";
+}
+function persistProfiles(){
+  try{ localStorage.setItem(PROFILE_KEY, JSON.stringify({ profiles:PROFILES, order:PROFILE_ORDER, active:activeProfile })); }catch(e){}
+}
+function renderProfiles(){
+  const box = $("profiles");
+  if (!box) return;
+  box.innerHTML = "";
+  PROFILE_ORDER.forEach(name => {
+    if (!PROFILES[name]) return;
+    const btn = document.createElement("button");
+    btn.dataset.p = name;
+    btn.textContent = name;
+    btn.classList.toggle("on", name === activeProfile);
+    btn.addEventListener("click", () => switchProfile(name));
+    box.appendChild(btn);
+  });
+}
+function syncProfilesFrom(p){
+  if (!p || !p.theme_profiles || typeof p.theme_profiles !== "object") return;
+  const keys = Object.keys(p.theme_profiles);
+  if (!keys.length) return;
+  PROFILES = p.theme_profiles;
+  PROFILE_ORDER = (Array.isArray(p.theme_order) && p.theme_order.length ? p.theme_order : keys).filter(n => PROFILES[n]);
+  activeProfile = String(p.active_theme || PROFILE_ORDER[0] || "默认");
+  if (!PROFILE_ORDER.includes("默认")) PROFILE_ORDER = ["默认", ...PROFILE_ORDER];
+  persistProfiles();
+  renderProfiles();
+}
+function switchProfile(name){
+  const prof = PROFILES && PROFILES[name];
+  if (!prof || name === activeProfile) return;
+  activeProfile = name;
+  // 用手机同一套 schema 回灌，颜色 / 圆角 / 描边 / 投影全部回来
+  applyImportedJSON(JSON.stringify(prof), true);
+  if (prof.blur) THEMES.forEach(t => {
+    if (typeof prof.blur[t.id] === "number") BLUR[t.id] = clamp(prof.blur[t.id], 0, 40);
+  });
+  renderProfiles();
+  render(); save(); queueApply(true);
+  toast("已切换到「" + name + "」");
+}
+function createProfile(){
+  const raw = prompt("新主题名称", "我的主题");
+  const name = String(raw || "").trim();
+  if (!name) return;
+  if (PROFILES[name]) { toast("已有同名主题"); return; }
+  PROFILES[name] = snapshotProfile();
+  PROFILE_ORDER.push(name);
+  activeProfile = name;
+  renderProfiles();
+  save(); queueApply(true);
+  toast("已新建「" + name + "」");
+}
+const newProfileBtn = $("newProfile");
+if (newProfileBtn) newProfileBtn.addEventListener("click", createProfile);
+
+/* 把「暗色」整套配置原样搬到「极暗」：三个主题各自独立的那几组参数全量复制 */
+function copyDarkToUltra(){
+  const clone = v => JSON.parse(JSON.stringify(v));
+  data.ultra = clone(data.dark);
+  BLUR.ultra = BLUR.dark;
+  RADIUS.ultra = RADIUS.dark;
+  CAND_RADIUS.ultra = CAND_RADIUS.dark;
+  RIM.ultra = RIM.dark;
+  RIM_A.ultra = RIM_A.dark;
+  RIM_BLUR.ultra = RIM_BLUR.dark;
+  RIMGRAD.ultra = clone(RIMGRAD.dark);
+  SHADOW.ultra = clone(SHADOW.dark);
+  GLOW.ultra = clone(GLOW.dark);
+  SEND.ultra = clone(SEND.dark);
+  INDEP.ultra = clone(INDEP.dark);
+  KEYMODE.ultra = KEYMODE.dark;
+  KEYGRAD.ultra = clone(KEYGRAD.dark);
+  activeTheme = THEMES.findIndex(t => t.id === "ultra");
+  render(); save(); refreshStatus(); queueApply(true);
+  return true;
+}
+
+const tlist = $("tlist");
+ITEMS.forEach((it, i) => {
+  const btn = document.createElement("button");
+  btn.className = "titem";
+  btn.dataset.i = i;
+  btn.innerHTML = `<span class="chip"><i></i></span>
+    <span class="meta"><span class="n">${it.name}${it.synced ? '' : '<span class="tag">预览</span>'}</span>
+    <span class="d"></span></span>`;
+  btn.addEventListener("click", () => { activeItem = i; render(); refreshStatus(); });
+  tlist.appendChild(btn);
+});
+
+/* ============================================================
+   面板：真机 1272×1057 坐标 → 百分比
+   ============================================================ */
+const PW = 1272, PH = 1057;
+const pctv = (v, base) => (v / base * 100) + "%";
+
+function place(el, x, y, w, h){
+  el.style.left = pctv(x, PW);
+  el.style.top = pctv(y, PH);
+  el.style.width = pctv(w, PW);
+  el.style.height = pctv(h, PH);
+}
+
+function makeKey(x, y, w, h, html, cls){
+  const b = document.createElement("button");
+  b.className = "k" + (cls ? " " + cls : "");
+  b.innerHTML = html || "";
+  place(b, x, y, w, h);
+  return b;
+}
+
+const TOOL = { logo:[46,6,96,96], icons:[[835,6],[982,6],[1129,6]] };
+const SVG = (body, extra) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+  stroke-linecap="round" stroke-linejoin="round" ${extra || ""}>${body}</svg>`;
+/* 真机图标：全部从微信输入法 APK（/tmp/wetype.apk）的 vector drawable 转成 SVG */
+const MI = (name, cls) => `<span class="mi${cls ? " " + cls : ""}">${window.WT_ICONS?.[name] || ""}</span>`;
+const ICON = {
+  smile: MI('icon_toolbar_sticker', 'emoji'),
+  clip:  MI('icon_custom_toolbar_clipboard', 'clip'),
+  down:  MI('icon_custom_toolbar_hide_keyboard', 'chev'),
+  back:  SVG(`<path d="M8.2 4.4h10.6a2.2 2.2 0 0 1 2.2 2.2v10.8a2.2 2.2 0 0 1-2.2 2.2H8.2L2.4 12z"/><path d="M11 9l5.6 6M16.6 9L11 15" stroke-width="1.5"/>`),
+  shift: SVG(`<path d="M12 3.6L20 11h-4.6v8.4H8.6V11H4z"/>`, `stroke-width="1.5"`),
+  mic:   SVG(`<rect x="9.2" y="2.8" width="5.6" height="10.6" rx="2.8"/><path d="M5.8 11.2a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.4V21"/><path d="M8.6 21h6.8"/>`),
+  kb:    SVG(`<rect x="2.6" y="6.4" width="18.8" height="11.2" rx="2.2"/><path d="M6 10h.1M9 10h.1M12 10h.1M15 10h.1M18 10h.1M7.4 13.6h.1M10.4 13.6h.1M13.4 13.6h.1M16.4 13.6h.1"/>`, `stroke-width="1.5"`)
+};
+
+function buildPanel(){
+  const panel = $("panel");
+  panel.innerHTML = "";
+
+  const D = 105;
+  panel.appendChild(makeKey(42, 37, D, D, MI('icon_logo_p', 'brand'), 'logo round'));
+  [ICON.smile, ICON.clip, ICON.down].forEach((icon, i) => {
+    panel.appendChild(makeKey([831, 978, 1125][i], 37, D, D, icon, "ico round"));
+  });
+
+  if (layout === 9) build9(panel); else build26(panel);
+
+  const c1 = document.createElement("div");
+  c1.className = "footico"; c1.innerHTML = ICON.down;
+  place(c1, layout === 9 ? 110 : 104, layout === 9 ? 952 : 940, 80, 80);
+  panel.appendChild(c1);
+
+  const c2 = document.createElement("div");
+  c2.className = "footico"; c2.innerHTML = ICON.kb;
+  place(c2, layout === 9 ? 1078 : 1096, layout === 9 ? 952 : 940, 80, 80);
+  panel.appendChild(c2);
+
+  panel.addEventListener("pointerdown", (e) => {
+    const key = e.target.closest(".k");
+    if (key) key.classList.add("press");
+  });
+}
+
+/* 9 键：真机截图实测 */
+function build9(panel){
+  const SIDE = { x:14, w:213, y:175, h:527 };
+  const RIGHT = { x:1044, w:213 };
+  const ROWS = [{ y:175, h:166 }, { y:355, h:166 }, { y:538, h:166 }, { y:722, h:164 }];
+  const BOTTOM = {
+    sym:  [14, 722, 213, 164],
+    num:  [247, 722, 163, 164],
+    space:[431, 722, 410, 164],
+    lang: [862, 722, 162, 164],
+    done: [1044, 538, 213, 345]
+  };
+
+  // 左侧标点栏：一整个长条，四个标点各占四分之一，不拆成四个按键
+  panel.appendChild(makeKey(SIDE.x, SIDE.y, SIDE.w, SIDE.h,
+    `<span class="pstrip"><span>?</span><span>,</span><span>°</span><span>!</span></span>`, "fn strip"));
+
+  panel.appendChild(makeKey(RIGHT.x, ROWS[0].y, RIGHT.w, ROWS[0].h, ICON.back, "fn"));
+  panel.appendChild(makeKey(RIGHT.x, ROWS[1].y, RIGHT.w, ROWS[1].h, "换行", "fn"));
+  panel.appendChild(makeKey(BOTTOM.done[0], BOTTOM.done[1], BOTTOM.done[2], BOTTOM.done[3], "完成", "accent"));
+
+  panel.appendChild(makeKey(BOTTOM.sym[0], BOTTOM.sym[1], BOTTOM.sym[2], BOTTOM.sym[3], "符号", "fn"));
+  panel.appendChild(makeKey(BOTTOM.num[0], BOTTOM.num[1], BOTTOM.num[2], BOTTOM.num[3], "123", ""));
+  panel.appendChild(makeKey(BOTTOM.space[0], BOTTOM.space[1], BOTTOM.space[2], BOTTOM.space[3],
+    `<span class="mic">${ICON.mic}</span><span class="pad0">0</span>`));
+  panel.appendChild(makeKey(BOTTOM.lang[0], BOTTOM.lang[1], BOTTOM.lang[2], BOTTOM.lang[3],
+    `<span class="cn mi">${MI('icon_quick_switch_chinese')}</span><span class="en mi">${MI('icon_quick_switch_english')}</span>`));
+
+  const grid = [
+    [["@#", "1"], ["ABC", "2"], ["DEF", "3"]],
+    [["GHI", "4"], ["JKL", "5"], ["MNO", "6"]],
+    [["PQRS", "7"], ["TUV", "8"], ["WXYZ", "9"]]
+  ];
+  const cols = [247, 513, 779];
+  grid.forEach((row, r) => {
+    row.forEach(([letters, digit], c) => {
+      panel.appendChild(makeKey(cols[c], ROWS[r].y, 245, ROWS[r].h,
+        letters + `<span class="digit">${digit}</span>`, "t9"));
+    });
+  });
+}
+
+/* 26 键：真机截图实测（深色主题下抓取） */
+function build26(panel){
+  const Y = [178, 361, 547, 733], H = 153, W = 107, STEP = 126.1;
+  const R1 = "qwertyuiop".split("");
+  const R1NUM = ["1","2","3","4","5","6","7","8","9","0"];
+  const R2 = "asdfghjkl".split("");
+  const R2SUP = ["-","/",":",";","(",")","~","'",'"'];
+  const R3 = "zxcvbnm".split("");
+  const R3SUP = ["@","-","#","&","?","!","…"];
+
+  R1.forEach((ch, i) => {
+    panel.appendChild(makeKey(15 + i*STEP, Y[0], W, H,
+      `<span class="sup">${R1NUM[i]}</span>${ch}`, "k26"));
+  });
+  R2.forEach((ch, i) => {
+    panel.appendChild(makeKey(77 + i*STEP, Y[1], W, H,
+      `<span class="sup">${R2SUP[i]}</span>${ch}`, "k26"));
+  });
+
+  panel.appendChild(makeKey(15, Y[2], 152, H, ICON.shift, "fn"));
+  R3.forEach((ch, i) => {
+    panel.appendChild(makeKey(202 + i*STEP, Y[2], W, H,
+      `<span class="sup">${R3SUP[i]}</span>${ch}`, "k26"));
+  });
+  panel.appendChild(makeKey(1105, Y[2], 152, H, ICON.back, "fn"));
+
+  panel.appendChild(makeKey(15, Y[3], 235, H, "123", ""));
+  panel.appendChild(makeKey(268, Y[3], 107, H,
+    `<span class="punct">'</span><span class="punct dot">.</span>`, ""));
+  panel.appendChild(makeKey(394, Y[3], 456, H, `<span class="mic">${ICON.mic}</span>`));
+  panel.appendChild(makeKey(866, Y[3], 125, H,
+    `<span class="cn mi">${MI('icon_quick_switch_chinese')}</span><span class="en mi">${MI('icon_quick_switch_english')}</span>`));
+  panel.appendChild(makeKey(1007, Y[3], 251, H, "完成", "accent"));
+}
+
+/* ============================================================
+   色轮
+   ============================================================ */
+(function drawWheel(){
+  const cv = $("wheelCanvas");
+  const size = 472, half = size/2, R = half - 6;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++){
+    for (let x = 0; x < size; x++){
+      const dx = x - half + .5, dy = y - half + .5;
+      const dist = Math.hypot(dx, dy);
+      const i = (y*size + x) * 4;
+      if (dist > R){ img.data[i+3] = 0; continue; }
+      let hue = Math.atan2(dx, -dy) * 180 / Math.PI;
+      if (hue < 0) hue += 360;
+      const c = hsv2rgb(hue, Math.min(1, dist/R), 1);
+      img.data[i] = c.r; img.data[i+1] = c.g; img.data[i+2] = c.b; img.data[i+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+})();
+
+/* ============================================================
+   渲染
+   ============================================================ */
+/* 描边预览：外层铺渐变，内层按描边宽度内缩并用键面色盖住，看上去就是一圈渐变描边 */
+/* 把半透明色压到不透明的底上，得到一个实心色（预览挖空层必须不透明，否则会透出渐变） */
+function flattenOver(c, base){
+  const a = (c.alpha ?? 100) / 100, x = rgbOf(c), y = rgbOf(base);
+  return `rgb(${Math.round(x.r*a + y.r*(1-a))}, ${Math.round(x.g*a + y.g*(1-a))}, ${Math.round(x.b*a + y.b*(1-a))})`;
+}
+
+function renderRimPreview(){
+  const tid = curTheme().id, g = RIMGRAD[tid], t = data[tid];
+  const w = Math.max(0, Math.min(6, Number(RIM[tid]) || 0));
+  const box = $("rimBox"), fill = $("rimFill"), hole = $("rimHole");
+  if (!box) return;
+  // 底板 = 面板色；描边层 = 渐变；挖空层 = 键面（实心），三者叠加才是真机那圈描边
+  box.style.background = rgba(t.panel);
+  if (KEYMODE[tid] === "gradient"){
+    // 渐变键面：底色先压成实心，再叠渐变，避免半透明处透出下面那圈描边
+    hole.style.backgroundColor = flattenOver(t.panel, C(0,0,0.08,100));
+    hole.style.backgroundImage = keyGradCss(90);
+  } else {
+    hole.style.backgroundImage = "none";
+    hole.style.backgroundColor = flattenOver(t.key, t.panel);
+  }
+  fill.style.background = gradCssOf(g, 0);
+  // 预览是 2× 的，模糊半径也跟着 ×2；rim-box 有 overflow:hidden，糊不出按键轮廓
+  const bl = RIM_BLUR[tid] || 0;
+  fill.style.filter = bl > 0 ? `blur(${bl * 2}px)` : "none";
+  fill.style.opacity = ((RIM_A[tid] ?? 100) / 100) * ((g.alpha ?? 100) / 100);
+  const k = 2; // 2× 放大，否则 2~3px 的描边在网页上几乎看不见
+  hole.style.inset = (w * k) + "px";
+  hole.style.borderRadius = Math.max(0, 16 - w * k) + "px";
+  hole.style.color = rgba(t.text);
+  // 描边宽度为 0 时没有描边，挖空层直接铺满
+  if (w === 0) hole.style.borderRadius = "12px";
+}
+
+/* 按键投影预览：真机是 BlurMaskFilter(radiusPx)，CSS 的 blur 半径按同比例换算成 cqw */
+function renderSend(){
+  const sd = SEND[curTheme().id];
+  const set = (id, val, labelId, up) => {
+    const el = $(id);
+    if (!el) return;
+    el.value = val;
+    if (labelId) $(labelId).textContent = up ? String(val).replace("#","").toUpperCase() : val;
+  };
+  set("sendAText", sd.aText, "sendATextVal", true);
+  set("sendGBg", sd.gBg, "sendGBgVal", true);
+  set("sendGText", sd.gText, "sendGTextVal", true);
+  set("sendDBg", sd.dBg, "sendDBgVal", true);
+  set("sendDText", sd.dText, "sendDTextVal", true);
+  $("sendDAlpha").value = sd.dAlpha; $("sendDAlphaVal").textContent = sd.dAlpha + "%";
+  $("sendMask").value = sd.mask; $("sendMaskVal").textContent = sd.mask + "%";
+
+  const box = $("sendSwatches");
+  if (box) {
+    const key = (bg, color, label, alpha) => {
+      const c = rgbOfHex(contextColor(bg, alpha));
+      return `<div style="text-align:center">
+        <div style="height:66px;border-radius:11px;background:rgb(${c[0]},${c[1]},${c[2]});color:${color};
+          display:grid;place-items:center;font-size:11px;font-weight:600">发送</div>
+        <div style="margin-top:5px;font-size:10px;color:var(--muted)">${label}</div></div>`;
+    };
+    box.innerHTML = key(hex8(data[curTheme().id].send), sd.aText, "可发送·主题色")
+      + key(sd.gBg, sd.gText, "灰色")
+      + key(sd.dBg, sd.dText, "禁用", sd.dAlpha);
+  }
+  // 禁用预览用文字透明
+  if (box && box.children[2]) {
+    const c = rgbOfHex(sd.dText);
+    box.children[2].firstElementChild.style.color = `rgba(${c[0]},${c[1]},${c[2]},${(sd.dAlpha/100).toFixed(2)})`;
+  }
+}
+
+/* 把 hex6 变 rgba 字符串，alpha 用百分比 */
+function contextColor(hex, alpha){
+  const v = hex.replace("#","");
+  const a = alpha == null ? 100 : alpha;
+  return v.length === 8 ? hex : `#${v.slice(0,6)}`;
+}
+function rgbOfHex(hex){
+  const v = hex.replace("#","");
+  return [parseInt(v.slice(0,2),16),parseInt(v.slice(2,4),16),parseInt(v.slice(4,6),16)];
+}
+
+function renderShadow(){
+  const sh = SHADOW[curTheme().id];
+  const h = sh.color.replace("#", "");
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  const panel = $("panel");
+  panel.style.setProperty("--shadowcolor", `rgba(${r},${g},${b},${(sh.alpha/100).toFixed(3)})`);
+  panel.style.setProperty("--shadowblur", (sh.blur/3.6).toFixed(2) + "cqw");
+  panel.style.setProperty("--shadowdy", (sh.dy/3.6).toFixed(2) + "cqw");
+
+  $("shColor").value = sh.color;
+  $("shColorVal").textContent = h.toUpperCase();
+  $("shBlur").value = sh.blur; $("shBlurVal").textContent = sh.blur + " dp";
+  $("shAlpha").value = sh.alpha; $("shAlphaVal").textContent = sh.alpha + "%";
+  $("shDy").value = sh.dy; $("shDyVal").textContent = sh.dy + " dp";
+}
+
+/* 顶部高光预览：只改面板上的两个变量，不动其它渲染 */
+function applyGlowPreview(){
+  const gl = GLOW[curTheme().id];
+  // 高光只在真机上画：网页预览不渲染这条描边（斜面/模糊差太多，看了反而误判），
+  // 这里只同步滑块数值，参数照常下发。
+  $("panel").style.setProperty("--glowa", 0);
+  $("panel").style.setProperty("--glowpx", gl.px);
+  $("glowAlpha").value = gl.alpha;
+  $("glowAlphaVal").textContent = gl.alpha + "%";
+  $("glowPx").value = gl.px;
+  $("glowPxVal").textContent = gl.px + " px";
+  $("panel").style.setProperty("--gloww", gl.w);
+  $("glowW").value = gl.w;
+  $("glowWVal").textContent = gl.w + " px";
+}
+
+function bindGlow(){
+  $("glowAlpha").addEventListener("input", () => {
+    GLOW[curTheme().id].alpha = Number($("glowAlpha").value) || 0;
+    applyGlowPreview(); save(); queueApply(true);
+  });
+  $("glowPx").addEventListener("input", () => {
+    GLOW[curTheme().id].px = Number($("glowPx").value) || 0;
+    applyGlowPreview(); save(); queueApply(true);
+  });
+  $("glowW").addEventListener("input", () => {
+    GLOW[curTheme().id].w = Number($("glowW").value) || 0;
+    applyGlowPreview(); save(); queueApply(true);
+  });
+}
+
+/* 按键按下色：亮色 / 暗色 / 极暗三行并排，谁都不跟谁走 */
+function applyPressPreview(){
+  THEMES.forEach(t => {
+    const p = PRESS[t.id];
+    const sw = document.querySelector('[data-press-on="' + t.id + '"]');
+    if (sw) sw.classList.toggle("on", p.on);
+    const inp = document.querySelector('[data-press-color="' + t.id + '"]');
+    if (inp) inp.value = p.color;
+    const val = document.querySelector('[data-press-val="' + t.id + '"]');
+    if (val) {
+      val.textContent = p.on ? p.color.replace("#", "").toUpperCase() : "不接管";
+    }
+  });
+}
+
+function bindPress(){
+  const box = $("pressRows");
+  THEMES.forEach(t => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<label>' + t.name + '</label>' +
+      '<div class="field">' +
+        '<button type="button" class="sw-box on" data-press-on="' + t.id + '"></button>' +
+        '<input type="color" data-press-color="' + t.id + '" value="' + PRESS[t.id].color + '">' +
+        '<span class="val" data-press-val="' + t.id + '">' + PRESS[t.id].color.replace("#", "").toUpperCase() + '</span>' +
+      '</div>';
+    box.appendChild(row);
+  });
+  THEMES.forEach(t => {
+    box.querySelector('[data-press-on="' + t.id + '"]').addEventListener("click", () => {
+      PRESS[t.id].on = !PRESS[t.id].on;
+      applyPressPreview(); save(); queueApply(true);
+    });
+    box.querySelector('[data-press-color="' + t.id + '"]').addEventListener("input", (e) => {
+      PRESS[t.id].color = e.target.value.toUpperCase();
+      applyPressPreview(); save(); queueApply(true);
+    });
+  });
+  applyPressPreview();
+}
+
+/* 右栏区块的归属：每一项只显示自己那组控件，其余一律收起。
+   放在 render 最前面统一执行，避免中途报错留下上一项的残留区块。 */
+function applySectionVisibility(){
+  const id = curItem().id;
+  const isKey = id === "key";
+  const isRim = id === "keyrim";
+  $("rimPanel").style.display  = isRim ? "block" : "none";
+  $("rimSizeSection").style.display = isRim ? "block" : "none";
+  $("glowSection").style.display   = id === "panel" ? "" : "none";
+  $("shadowSection").style.display = isKey ? "" : "none";
+  $("pressSection").style.display  = isKey ? "" : "none";
+  $("sendSection").style.display   = id === "send" ? "block" : "none";
+  $("candSection").style.display   = id === "candBg" ? "block" : "none";
+  $("radiusSection").style.display = isKey ? "block" : "none";
+  $("keyModeSeg").style.display    = isKey ? "flex" : "none";
+  $("bgSection").classList.toggle("show", id === "panel");
+  // 主题色阶梯、色板之外的整键区块，描边项一概不出现
+  $("accentSection").style.display = (id === "fnText" || id === "smallText" || id === "send" || isRim) ? "none" : "flex";
+  $("unsynced").style.display = SYNC_ITEMS.includes(id) ? "none" : "block";
+}
+
+function render(){
+  applySectionVisibility();
+  const theme = curTheme();
+  const item = curItem();
+  const c = curColor();
+  const t = data[theme.id];
+
+  const segBox = $("themesSeg");
+  if (segBox) [...segBox.children].forEach((btn, i) => btn.classList.toggle("on", i === activeTheme));
+  const pbox = $("profiles");
+  if (pbox) [...pbox.querySelectorAll("button[data-p]")].forEach(b => b.classList.toggle("on", b.dataset.p === activeProfile));
+
+  [...tlist.children].forEach((btn, i) => {
+    btn.classList.toggle("on", i === activeItem);
+    const ci = colorOf(theme, ITEMS[i]);
+    btn.querySelector(".chip i").style.background = rgba(ci);
+    btn.querySelector(".d").textContent = hex8(ci).toUpperCase();
+  });
+
+  const panel = $("panel");
+  panel.style.setProperty("--tint", rgba(t.panel));
+  panel.style.setProperty("--blurpx", BLUR[theme.id] + "px");
+  panel.style.setProperty("--keybg", (KEYMODE[theme.id] === "gradient")
+    ? keyGradCss(90)
+    : rgba(t.key));
+  panel.style.setProperty("--text", rgba(t.text));
+  panel.style.setProperty("--textSmall", rgba(t.smallText));
+  panel.style.setProperty("--accent", rgba(t.accent));
+  panel.style.setProperty("--logoCircle", rgba(t.logoCircle));
+  panel.style.setProperty("--logoIcon", rgba(t.logoIcon));
+  panel.style.setProperty("--fnIcon", rgba(t.fnIcon));
+  panel.style.setProperty("--keyradius", (RADIUS[theme.id] * 0.25).toFixed(2) + "cqw");
+  panel.style.setProperty("--panelradius", (PANEL_RADIUS * 0.079).toFixed(2) + "cqw");
+  // 描边（key_rim_px / key_rim_alpha）只在真机上生效，预览图里不渲染，
+  // 免得调这两个参数时预览键面被白边撑得变形、看不出真实效果
+  // 高光描边只在「按键高光描边」这一项预览，其它项不显示；
+  // 宽度按真机 1272px 面板等比换算（1px ≈ 0.08cqw），不再放大
+  const rimOn = item.id === "keyrim";
+  panel.style.setProperty("--rimw", rimOn ? (RIM[theme.id] * 0.08).toFixed(3) + "cqw" : "0cqw");
+  panel.style.setProperty("--rimgrad", rimOn ? gradCssOf(RIMGRAD[theme.id], 0) : "none");
+  panel.style.setProperty("--rima", rimOn ? String((RIM_A[theme.id] ?? 100) / 100) : "0");
+
+  syncMicUI();
+  $("stageTheme").textContent = theme.name;
+  $("stageTarget").textContent = item.name;
+
+  $("ctrlTheme").textContent = theme.name;
+  $("ctrlName").textContent = item.name;
+  $("ctrlNote").textContent = item.desc;
+  $("ctrlBlur").textContent = BLUR[theme.id] + " dp";
+  const isKeyItem = item.id === "key";
+  [...$("keyModeSeg").children].forEach(b => b.classList.toggle("on", b.dataset.km === KEYMODE[theme.id]));
+  const rimItem = isRimItem();
+  const gradOn = (isKeyItem && KEYMODE[theme.id] === "gradient") || rimItem;
+  $("gradSection").style.display = gradOn ? "block" : "none";
+  const g = activeGrad();
+  if (gradOn) {
+    gradStop = clamp(gradStop, 0, g.stops.length - 1);
+    $("gradFill").style.background = rimItem ? gradCssOf(g, 0) : keyGradCss(90);
+    const hs = $("gradHandles");
+    hs.innerHTML = "";
+    g.stops.forEach((st, i) => {
+      const el = document.createElement("div");
+      el.className = "grad-handle" + (i === gradStop ? " on" : "");
+      el.tabIndex = 0;
+      el.setAttribute("role", "slider");
+      el.setAttribute("aria-valuetext", Math.round(st.p * 100) + "%");
+      el.style.left = (st.p * 100) + "%";
+      el.style.background = rgba(st.c);
+      el.dataset.idx = i;
+      hs.appendChild(el);
+    });
+    const sel = g.stops[gradStop];
+    $("gPos").value = Math.round(sel.p * 100);
+    $("gPosVal").textContent = Math.round(sel.p * 100) + "%";
+    const ga = g.alpha ?? 100;
+    $("gAlphaRow").style.display = rimItem ? "none" : "";
+    $("gAlpha").value = ga;
+    $("gAlphaVal").textContent = ga + "%";
+    $("gDel").style.opacity = g.stops.length <= 2 ? .45 : 1;
+  }
+  $("gAngle").value = g.angle;
+  $("gAngleVal").textContent = g.angle + "°";
+  $("cradius").value = CAND_RADIUS[theme.id];
+  $("cradiusVal").textContent = CAND_RADIUS[theme.id] + " dp";
+  $("pradius").value = PANEL_RADIUS;
+  $("pradiusVal").textContent = PANEL_RADIUS + " dp";
+  $("kradius").value = RADIUS[theme.id];
+  $("kradiusVal").textContent = RADIUS[theme.id] + " dp";
+  $("rimPx").value = RIM[theme.id];
+  $("rimPxVal").textContent = RIM[theme.id] + " px";
+  $("rimAlpha").value = RIM_A[theme.id];
+  $("rimAlphaVal").textContent = RIM_A[theme.id] + "%";
+  $("rimBlur").value = RIM_BLUR[theme.id];
+  $("rimBlurVal").textContent = (RIM_BLUR[theme.id] || 0) + " px";
+  [...$("rimThemeSeg").children].forEach(b =>
+    b.classList.toggle("on", b.dataset.th === (theme.id === "ultra" ? "dark" : theme.id)));
+  renderRimPreview();
+  renderSend();
+  const sendKey = panel.querySelector(".k.accent");
+  if (sendKey) {
+    if (item.id === "send") {
+      sendKey.style.background = rgba(t.accent);
+      sendKey.style.color = SEND[theme.id].aText;
+    } else {
+      sendKey.style.background = "";
+      sendKey.style.color = "";
+    }
+  }
+  applyPressPreview();
+  renderShadow();
+
+  const rad = c.s * 110;
+  const ang = c.h * Math.PI/180;
+  $("ring").style.left = (118 + Math.sin(ang)*rad) + "px";
+  $("ring").style.top  = (118 - Math.cos(ang)*rad) + "px";
+  $("ring").style.borderColor = c.v > .55 && c.s < .35 ? "rgba(0,0,0,.72)" : "rgba(255,255,255,.9)";
+
+  $("vRange").value = Math.round(c.v*100);
+  $("vVal").textContent = Math.round(c.v*100) + "%";
+  const pure = hsv2rgb(c.h, c.s, 1);
+  $("vRange").style.background = `linear-gradient(90deg,#000, rgb(${pure.r},${pure.g},${pure.b}))`;
+
+  $("aRange").value = c.alpha;
+  $("aVal").textContent = c.alpha + "%";
+  const x = rgbOf(c);
+  $("aRange").style.background = `linear-gradient(90deg,rgba(${x.r},${x.g},${x.b},0),rgb(${x.r},${x.g},${x.b}))`;
+
+  if (document.activeElement !== $("hex")) $("hex").value = hex6(c);
+  renderNumbers(x);
+
+  const blurEl = $("blur");
+  blurEl.value = BLUR[theme.id];
+  $("blurVal").textContent = BLUR[theme.id] + " dp";
+  paintBlur(blurEl);
+  document.querySelectorAll(".preset").forEach((btn, i) => {
+    const p = PRESETS[i];
+    btn.classList.toggle("active",
+      Math.abs(p.h - t.panel.h) < .5 && Math.abs(p.s - t.panel.s) < .02 &&
+      Math.abs(p.v - t.panel.v) < .02 && p.alpha === t.panel.alpha && p.blur === BLUR[theme.id]);
+  });
+
+  renderRecents();
+  renderAccent();
+  applyGlowPreview();
+}
+
+/* 主题色面板：当前主题色 + 五档 alpha 变体（模块替换时保留原 alpha） */
+const ACCENT_STEPS = [[5,"5%"],[10,"10%"],[20,"20%"],[30,"30%"],[50,"50%"],[100,"100%"]];
+function renderAccent(){
+  const a = data[curTheme().id].accent;
+  const x = rgbOf(a);
+  $("accentChip").style.background = hex6(a);
+  $("accentHex").textContent = hex8(a).toUpperCase();
+  const box = $("accentLadder");
+  box.innerHTML = "";
+  ACCENT_STEPS.forEach(([al, label]) => {
+    const cell = document.createElement("div");
+    cell.innerHTML = `<i style="background:rgba(${x.r},${x.g},${x.b},${al/100})"></i><span>${label}</span>`;
+    box.appendChild(cell);
+  });
+}
+
+function renderNumbers(c){
+  const c2 = curColor();
+  const box = $("nums");
+  if (!box) return;
+  const vals = mode === "rgb"
+    ? [["R", c.r], ["G", c.g], ["B", c.b]]
+    : [["H", Math.round(c2.h)], ["S", Math.round(c2.s*100)], ["V", Math.round(c2.v*100)]];
+
+  if (box.children.length !== 3){
+    box.innerHTML = "";
+    vals.forEach(([label], i) => {
+      const wrap = document.createElement("label");
+      wrap.className = "num";
+      wrap.innerHTML = `<span>${label}</span><input type="number" data-i="${i}">`;
+      box.appendChild(wrap);
+    });
+  }
+  [...box.querySelectorAll("input")].forEach((inp, i) => {
+    if (document.activeElement !== inp) inp.value = vals[i][1];
+  });
+}
+
+function paintBlur(el){
+  const p2 = (Number(el.value) - Number(el.min)) / (Number(el.max) - Number(el.min)) * 100;
+  el.style.background = `linear-gradient(90deg,var(--ink) 0%,var(--ink) ${p2}%,var(--line) ${p2}%,var(--line) 100%)`;
+}
+function renderRecents(){
+  const box = $("recents");
+  if (!box) return;
+  box.innerHTML = "";
+  recents.forEach((hex) => {
+    const b = document.createElement("button");
+    b.className = "recent";
+    b.style.background = hex;
+    b.title = hex;
+    b.addEventListener("click", () => { if (setFromHex(hex, true)) commit(); });
+    box.appendChild(b);
+  });
+}
+
+/* ============================================================
+   下发
+   ============================================================ */
+let applyTimer = null, lastSent = "", recentTimer = null;
+
+function commit(){
+  // 在这两个「小字」项里动过颜色 → 从此独立配色，不再跟随「字符颜色」
+  const id = curItem().id;
+  if (id === "smallText") INDEP[curTheme().id].small = true;
+  if (id === "fnText") INDEP[curTheme().id].fn = true;
+  render(); save(); queueApply(); pushRecentLater();
+}
+function pushRecentLater(){
+  clearTimeout(recentTimer);
+  recentTimer = setTimeout(() => {
+    const hex = hex8(curColor()).toUpperCase();
+    if (recents[0] === hex) return;
+    recents = [hex, ...recents.filter(v => v !== hex)].slice(0, 10);
+    try{ localStorage.setItem("wetype-dark.recents4", JSON.stringify(recents)); }catch(e){}
+    renderRecents();
+  }, 700);
+}
+function queueApply(force){
+  if (!online) return;
+  if (!force && !SYNC_ITEMS.includes(curItem().id)) return;
+  clearTimeout(applyTimer);
+  applyTimer = setTimeout(sendApply, 140);
+}
+function buildPaletteRaw(){
+  const out = {};
+  THEMES.forEach(t => {
+    const d = data[t.id];
+    out[t.id] = {
+      panel_bg:    hex8(d.panel).toUpperCase(),
+      key_fill:    hex8(d.key).toUpperCase(),
+      key_text:    hex8(d.text).toUpperCase(),
+      key_small_text: INDEP[t.id].small ? hex8(d.smallText).toUpperCase() : "",
+      key_fn_text: INDEP[t.id].fn ? hex8(d.fnText).toUpperCase() : "",
+      send_bg:     hex8(d.accent).toUpperCase(),
+      accent:      hex8(d.accent).toUpperCase(),
+      logo_circle: hex8(d.logoCircle).toUpperCase(),
+      logo_glyph:  hex8(d.logoIcon).toUpperCase(),
+      key_radius_dp: RADIUS[t.id],
+      fn_icon:     hex8(d.fnIcon).toUpperCase(),
+      key_mode:    KEYMODE[t.id],
+      key_grad_c1: hex8(sortedStopsFor(t.id)[0].c).toUpperCase(),
+      key_grad_c2: hex8(sortedStopsFor(t.id).slice(-1)[0].c).toUpperCase(),
+      key_grad_angle: KEYGRAD[t.id].angle,
+      key_grad_alpha: KEYGRAD[t.id].alpha ?? 100,
+      key_grad_stops: sortedStopsFor(t.id).map(x => ({
+        p: Math.round(x.p * 1000) / 1000,
+        c: hex8(x.c).toUpperCase()
+      })),
+      cand_bg:     hex8(d.candBg).toUpperCase(),
+      cand_radius_dp: CAND_RADIUS[t.id],
+      key_shadow:     SHADOW[t.id].color.toUpperCase(),
+      key_shadow_alpha: SHADOW[t.id].alpha,
+      key_shadow_blur_dp: SHADOW[t.id].blur,
+      key_shadow_dy_dp: SHADOW[t.id].dy,
+      top_glow_alpha: GLOW[t.id].alpha,
+      top_glow_px: GLOW[t.id].px,
+      top_glow_width: GLOW[t.id].w,
+      // 每段都写：「接管」关掉时写空串，模块不会拿亮色那份兜底（否则又会「一起变」）
+      key_press_bg: PRESS[t.id].on
+        ? "#FF" + PRESS[t.id].color.replace("#", "").toUpperCase()
+        : "",
+      key_rim_px:   RIM[t.id],
+      key_rim_alpha: RIM_A[t.id],
+      key_rim_blur: RIM_BLUR[t.id],
+      key_rim_angle: RIMGRAD[t.id].angle,
+      key_rim_alpha_all: RIMGRAD[t.id].alpha,
+      key_rim_stops: RIMGRAD[t.id].stops.map(st => ({
+        p: Math.round(st.p * 1000) / 1000,
+        c: hex6(st.c).toUpperCase(), // hex6 自带 #，这里不能再加
+        a: clamp(Math.round(st.c.alpha), 0, 100)
+      })),
+      send_active_bg:   hex8(d.accent).toUpperCase(),
+      send_active_text: SEND[t.id].aText.toUpperCase(),
+      send_grey_bg:     SEND[t.id].gBg.toUpperCase(),
+      send_grey_text:   SEND[t.id].gText.toUpperCase(),
+      send_disabled_bg:   SEND[t.id].dBg.toUpperCase(),
+      send_disabled_text: SEND[t.id].dText.toUpperCase(),
+      send_disabled_alpha: SEND[t.id].dAlpha,
+      send_mask_alpha:  SEND[t.id].mask
+    };
+  });
+  // 形状参数写在根节点：模块读根节点优先，于是亮/暗/极暗天然共用一份。
+  out.key_radius_dp = RADIUS[THEMES[0].id];
+  out.cand_radius_dp = CAND_RADIUS[THEMES[0].id];
+  out.panel_radius_dp = PANEL_RADIUS;
+  out.mic_icon = MIC_ICON || "";
+  return out;
+}
+
+/* 下发 / 导出用的完整包：调色板 + 主题档案三件套（手机端也认这套 schema） */
+function buildPalette(){
+  const out = buildPaletteRaw();
+  out.theme_profiles = PROFILES || {};
+  out.theme_order = PROFILE_ORDER || ["默认"];
+  out.active_theme = activeProfile || "默认";
+  return out;
+}
+
+async function sendApply(){
+  const th = curTheme().id;
+  const body = {
+    theme: th,
+    panelColor: hex8(data[th].panel).toUpperCase(),
+    blurRadiusDp: BLUR[th],
+    logoIconColor: hex8(data[th].logoIcon).toUpperCase(),
+    logoCircleColor: hex8(data[th].logoCircle).toUpperCase(),
+    fnIconColor: hex8(data[th].fnIcon).toUpperCase(),
+    accentColor: hex8(data[th].accent).toUpperCase(),
+    palette: buildPalette()
+  };
+  const sig = JSON.stringify(body);
+  if (sig === lastSent) return;
+  lastSent = sig;
+  try{
+    const res = await fetch("apply", { method:"POST", headers:{ "Content-Type":"application/json" }, body:sig });
+    const json = await res.json();
+    if (json && json.ok){
+      $("applyText").textContent = "已写入手机";
+      $("applyTime").textContent = nowTime();
+      lastApplyAt = nowTime();
+      paintConn();
+      const bar = $("conn");
+      bar.classList.remove("flash");
+      void bar.offsetWidth;
+      bar.classList.add("flash");
+    } else throw new Error((json && json.error) || "apply failed");
+  }catch(e){
+    lastSent = "";
+    setOnline(false);
+    $("applyText").textContent = "写入失败 · " + e.message;
+    $("applyTime").textContent = nowTime();
+    toast("写入手机失败：" + ((e && e.message) || e));
+  }
+}
+function setOnline(on){ online = on; $("dot").classList.toggle("on", on); paintConn(); refreshStatus(); }
+/* 顶部那颗常驻状态灯：把「服务在不在、手机在不在、最后一次写进去是什么时候」一直摆出来 */
+function paintConn(){
+  const bar = $("conn"), dot = $("dotTop");
+  if (!bar) return;
+  const live = online && !!deviceSerial;
+  bar.classList.toggle("on", live);
+  bar.classList.toggle("off", online && !deviceSerial);
+  dot.classList.toggle("on", live);
+  $("connText").textContent = !online
+    ? "未连上 serve.py"
+    : (deviceSerial ? "已连接手机 · " + deviceSerial : "服务已启动 · 手机未连接");
+  $("connSub").textContent = !online
+    ? "起 serve.py 再刷新"
+    : (deviceSerial ? (lastApplyAt ? "已同步 " + lastApplyAt : "改动即生效") : "查 adb devices / 数据线");
+}
+function refreshStatus(){
+  if (!SYNC_ITEMS.includes(curItem().id)) return;
+  if (online){ $("applyText").textContent = "已连接 · " + curTheme().name + "参数即改即生效"; }
+  else { $("applyText").textContent = "本地预览 · 未连接 serve.py"; $("applyTime").textContent = ""; }
+}
+async function ping(){
+  try{
+    const res = await fetch("ping", { cache:"no-store" });
+    const json = await res.json();
+    const ok = !!(json && json.ok);
+    const serial = String((json && json.serial) || "");
+    // 连上 serve.py 时只刷新状态，绝不自动回灌：
+    // 以前这里会自动 queueApply()，页面一打开/一重连就把 localStorage 里的旧状态整份写进手机，
+    // 把用户在手机上调好的配色冲掉。现在只有真正动过控件才会下发（见 markDirty）。
+    if (ok && serial && serial !== deviceSerial) lastSent = "";
+    deviceSerial = serial;
+    if (ok !== online || serial !== lastSerial) setOnline(ok);
+    else { paintConn(); refreshStatus(); }
+    lastSerial = serial;
+  }catch(e){ if (online) setOnline(false); else paintConn(); }
+}
+const nowTime = () => {
+  const d = new Date();
+  return [d.getHours(),d.getMinutes(),d.getSeconds()].map(n => String(n).padStart(2,"0")).join(":");
+};
+
+/* ============================================================
+   交互
+   ============================================================ */
+const wheel = $("wheel");
+let wheelDrag = false;
+function pickWheel(ev){
+  const rect = wheel.getBoundingClientRect();
+  const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+  const cx = rect.width/2, cy = rect.height/2;
+  const dx = x - cx, dy = y - cy;
+  const c = curColor();
+  c.s = clamp(Math.hypot(dx,dy) / (rect.width/2 - 6), 0, 1);
+  let ang = Math.atan2(dx, -dy) * 180 / Math.PI;
+  if (ang < 0) ang += 360;
+  c.h = ang;
+  commit();
+}
+wheel.addEventListener("pointerdown", (e) => { wheelDrag = true; wheel.setPointerCapture(e.pointerId); pickWheel(e); });
+wheel.addEventListener("pointermove", (e) => { if (wheelDrag) pickWheel(e); });
+wheel.addEventListener("pointerup", () => { wheelDrag = false; });
+wheel.addEventListener("pointercancel", () => { wheelDrag = false; });
+
+const numsEl = $("nums");
+if (numsEl) numsEl.addEventListener("input", (e) => {
+  const inp = e.target;
+  if (!inp.matches("input")) return;
+  const v = Number(inp.value);
+  if (!Number.isFinite(v)) return;
+  const c = curColor();
+  if (mode === "rgb"){
+    const x = { ...rgbOf(c) };
+    if (inp.dataset.i === "0") x.r = clamp(v,0,255);
+    if (inp.dataset.i === "1") x.g = clamp(v,0,255);
+    if (inp.dataset.i === "2") x.b = clamp(v,0,255);
+    const hsv = rgb2hsv(x.r,x.g,x.b);
+    c.h = hsv.h; c.s = hsv.s; c.v = hsv.v;
+  } else {
+    if (inp.dataset.i === "0") c.h = clamp(v,0,360);
+    if (inp.dataset.i === "1") c.s = clamp(v,0,100)/100;
+    if (inp.dataset.i === "2") c.v = clamp(v,0,100)/100;
+  }
+  commit();
+});
+
+const tabsEl = $("tabs");
+if (tabsEl) tabsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-mode]");
+  if (!btn) return;
+  mode = btn.dataset.mode;
+  [...$("tabs").children].forEach(b => b.classList.toggle("on", b === btn));
+  $("nums").innerHTML = "";
+  render();
+});
+
+$("vRange").addEventListener("input", (e) => { curColor().v = Number(e.target.value)/100; commit(); });
+$("aRange").addEventListener("input", (e) => { curColor().alpha = clamp(Number(e.target.value),0,100); commit(); });
+
+$("blur").addEventListener("input", (e) => { BLUR[curTheme().id] = clamp(Number(e.target.value),0,40); commit(); });
+$("kradius").addEventListener("input", (e) => { const v = clamp(Number(e.target.value),0,40); THEMES.forEach(t => RADIUS[t.id] = v); $("kradiusVal").textContent = v + " dp"; commit(); });
+$("pradius").addEventListener("input", (e) => { PANEL_RADIUS = clamp(Number(e.target.value),0,40); $("pradiusVal").textContent = PANEL_RADIUS + " dp"; commit(); });
+$("cradius").addEventListener("input", (e) => { const v = clamp(Number(e.target.value),0,40); THEMES.forEach(t => CAND_RADIUS[t.id] = v); $("cradiusVal").textContent = v + " dp"; commit(); });
+$("rimPx").addEventListener("input", (e) => { RIM[curTheme().id] = clamp(Number(e.target.value),0,6); commit(); });
+$("rimAlpha").addEventListener("input", (e) => { RIM_A[curTheme().id] = clamp(Number(e.target.value),0,100); commit(); });
+$("rimBlur").addEventListener("input", (e) => { RIM_BLUR[curTheme().id] = clamp(Number(e.target.value),0,8); commit(); });
+[ ["sendAText","aText"], ["sendGBg","gBg"], ["sendGText","gText"],
+  ["sendDBg","dBg"], ["sendDText","dText"] ].forEach(([id, key]) => {
+  const el = $(id);
+  if (el) el.addEventListener("input", (e) => {
+    SEND[curTheme().id][key] = e.target.value.toUpperCase();
+    commit();
+  });
+});
+$("sendDAlpha").addEventListener("input", (e) => { SEND[curTheme().id].dAlpha = clamp(Number(e.target.value),0,100); commit(); });
+$("sendMask").addEventListener("input", (e) => { SEND[curTheme().id].mask = clamp(Number(e.target.value),0,100); commit(); });
+$("keyModeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const tid = curTheme().id, mode = b.dataset.km;
+  if (mode === "gradient" && KEYMODE[tid] !== "gradient") {
+    const base = data[tid].key;
+    KEYGRAD[tid].stops = [
+      { p:0, c:{ h:base.h, s:base.s, v:base.v, alpha:base.alpha } },
+      { p:1, c:{ h:base.h, s:base.s, v:Math.max(0, base.v * .82), alpha:base.alpha } }
+    ];
+    gradStop = 0;
+  }
+  KEYMODE[tid] = mode;
+  commit();
+});
+/* 色带交互（Figma 式）：按住色标直接拖、点色带加色标、拖动时浮出百分比 */
+function gradRect(){ return $("gradRamp").getBoundingClientRect(); }
+function gradP(clientX){
+  const r = gradRect();
+  return clamp((clientX - r.left) / Math.max(1, r.width), 0, 1);
+}
+function showGradBubble(p){
+  const b = $("gradBubble");
+  if (!b) return;
+  const r = gradRect(), rr = $("gradRamp").getBoundingClientRect();
+  b.textContent = Math.round(p * 100) + "%";
+  b.style.left = (r.left - rr.left + r.width * p) + "px";
+  b.classList.add("show");
+}
+function hideGradBubble(){
+  const b = $("gradBubble");
+  if (b) b.classList.remove("show");
+}
+function focusGradSel(){
+  const h = $("gradHandles").querySelector(".grad-handle.on");
+  if (h) { try { h.focus({ preventScroll:true }); } catch(e){} }
+}
+function addGradStopAt(p, color){
+  const st = gradStops();
+  if (st.length >= 8){ toast("最多 8 个色标"); return null; }
+  st.push({ p: Math.round(p * 1000) / 1000, c: color || sampleGradient(p) });
+  gradStop = st.length - 1;
+  render();
+  return gradStop;
+}
+function deleteGradStop(){
+  const st = gradStops();
+  if (st.length <= 2){ toast("至少保留 2 个色标"); return; }
+  st.splice(gradStop, 1);
+  gradStop = Math.max(0, gradStop - 1);
+  render(); commit(); focusGradSel();
+}
+
+let gradDrag = null;
+
+$("gradHandles").addEventListener("pointerdown", (e) => {
+  const h = e.target.closest(".grad-handle");
+  if (!h) return;
+  e.preventDefault();
+  gradStop = Number(h.dataset.idx);
+  gradDrag = gradStop;
+  render();
+  showGradBubble(gradStops()[gradStop].p);
+  focusGradSel();
+});
+$("gradHandles").addEventListener("keydown", (e) => {
+  const h = e.target.closest(".grad-handle");
+  if (!h) return;
+  const st = gradStops()[Number(h.dataset.idx)];
+  if (!st) return;
+  const step = e.shiftKey ? 0.05 : 0.005;
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight"){
+    e.preventDefault();
+    st.p = clamp(st.p + (e.key === "ArrowRight" ? step : -step), 0, 1);
+    render(); commit(); focusGradSel();
+  } else if (e.key === "Delete" || e.key === "Backspace"){
+    e.preventDefault();
+    deleteGradStop();
+  } else if (e.key === "Home" || e.key === "End"){
+    e.preventDefault();
+    st.p = e.key === "Home" ? 0 : 1;
+    render(); commit(); focusGradSel();
+  }
+});
+$("gradRamp").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;               // 右键留给自绘菜单
+  if (e.target.closest(".grad-handle")) return;
+  e.preventDefault();
+  const p = gradP(e.clientX);
+  const idx = addGradStopAt(p);
+  if (idx === null) return;
+  gradDrag = idx;
+  showGradBubble(p);
+});
+window.addEventListener("pointermove", (e) => {
+  if (gradDrag === null) return;
+  const st = gradStops()[gradDrag];
+  if (!st) return;
+  st.p = Math.round(gradP(e.clientX) * 1000) / 1000;
+  render();
+  showGradBubble(st.p);
+});
+window.addEventListener("pointerup", () => {
+  if (gradDrag === null) return;
+  gradDrag = null;
+  hideGradBubble();
+  commit();
+});
+window.addEventListener("pointercancel", () => {
+  if (gradDrag === null) return;
+  gradDrag = null;
+  hideGradBubble();
+  commit();
+});
+
+$("gPos").addEventListener("input", (e) => {
+  const st = gradStops()[gradStop];
+  if (!st) return;
+  st.p = clamp(Number(e.target.value) / 100, 0, 1);
+  render();
+});
+$("gPos").addEventListener("change", () => commit());
+$("gAdd").addEventListener("click", () => {
+  const sorted = sortedStops();
+  let gap = -1, at = 0.5;
+  for (let i = 1; i < sorted.length; i++) {
+    const d = sorted[i].p - sorted[i-1].p;
+    if (d > gap) { gap = d; at = (sorted[i].p + sorted[i-1].p) / 2; }
+  }
+  addGradStopAt(at);
+  commit(); focusGradSel();
+});
+$("gDel").addEventListener("click", deleteGradStop);
+$("gAngle").addEventListener("input", (e) => {
+  activeGrad().angle = clamp(Number(e.target.value), 0, 360);
+  render(); commit();
+});
+$("gAlpha").addEventListener("input", (e) => {
+  activeGrad().alpha = clamp(Number(e.target.value), 0, 100);
+  render();
+});
+$("gAlpha").addEventListener("change", () => commit());
+
+/* 高光描边：右上角的亮色 / 暗色开关直接切到对应主题，两套各自保存 */
+$("rimThemeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const want = b.dataset.th;
+  const idx = THEMES.findIndex(t => t.id === want);
+  if (idx >= 0) { activeTheme = idx; render(); refreshStatus(); }
+});
+
+/* 按键投影：改完立刻同步到真机（不受「当前项目」是否可同步影响） */
+function commitShadow(){ renderShadow(); save(); queueApply(true); }
+$("shColor").addEventListener("input", (e) => { SHADOW[curTheme().id].color = e.target.value.toUpperCase(); commitShadow(); });
+$("shBlur").addEventListener("input", (e) => { SHADOW[curTheme().id].blur = clamp(Number(e.target.value),0,24); commitShadow(); });
+$("shAlpha").addEventListener("input", (e) => { SHADOW[curTheme().id].alpha = clamp(Number(e.target.value),0,100); commitShadow(); });
+$("shDy").addEventListener("input", (e) => { SHADOW[curTheme().id].dy = clamp(Number(e.target.value),0,24); commitShadow(); });
+
+$("hex").addEventListener("input", (e) => {
+  let v = e.target.value.trim().replace(/^#/, "").replace(/[^0-9a-fA-F]/g, "").slice(0,8);
+  if (v.length === 6 || v.length === 8){
+    if (setFromHex(v, true)){ render(); save(); queueApply(); pushRecentLater(); }
+  }
+});
+$("hex").addEventListener("blur", () => { $("hex").value = hex6(curColor()); });
+
+
+$("layoutSeg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-layout]");
+  if (!btn) return;
+  layout = Number(btn.dataset.layout);
+  [...$("layoutSeg").children].forEach(b => b.classList.toggle("on", b === btn));
+  buildPanel();
+  render();
+});
+
+/* 色板 */
+const PALETTES = [
+  { name:"中性", colors:["#FFFFFF","#F2F2F0","#E2E2E2","#C7C7CC","#A5A5AA","#8E8E93","#48484A","#1C1C1E","#0A0A0A"] },
+  { name:"冷",   colors:["#EAF3F7","#D5E6EF","#B7D3E3","#8FB8CE","#5E8FAE","#3A6A8A","#1E4059"] },
+  { name:"暖",   colors:["#FFF6EE","#FBE7D4","#F1CFAF","#E2AE84","#C98B5C","#9E5F3C","#6E3A26"] },
+  { name:"强调", colors:["#FF6B35","#FFC145","#FFE066","#00B39B","#4C8DFF","#6C5BFF","#C86BFF"] }
+];
+const palettesBox = $("palettes");
+PALETTES.forEach((p) => {
+  const block = document.createElement("div");
+  block.className = "palette-block";
+  block.innerHTML = `<div class="palette-name">${p.name}</div>
+    <div class="swatches">${p.colors.map(c => `<button class="sw" data-c="${c}" title="${c}" style="background:${c}"></button>`).join("")}</div>`;
+  block.addEventListener("click", (e) => {
+    const sw = e.target.closest(".sw");
+    if (sw && setFromHex(sw.dataset.c, false)) commit();
+  });
+  palettesBox.appendChild(block);
+});
+
+/* 预设 */
+const PRESETS = [
+  { name:"雾面灰", h:0, s:0, v:.886, alpha:78, blur:24 },
+  { name:"深空",   h:240, s:.07, v:.12, alpha:72, blur:28 },
+  { name:"纸白",   h:240, s:.03, v:.965, alpha:88, blur:20 },
+  { name:"墨黑",   h:0, s:0, v:.04, alpha:82, blur:30 },
+  { name:"青绿",   h:107.3, s:.214, v:.953, alpha:92, blur:24 },
+  { name:"沙砾",   h:38, s:.09, v:.91, alpha:80, blur:24 }
+];
+const presetBox = $("presets");
+PRESETS.forEach((p) => {
+  const x = hsv2rgb(p.h,p.s,p.v);
+  const btn = document.createElement("button");
+  btn.className = "preset";
+  btn.type = "button";
+  btn.innerHTML = `<i style="background:rgba(${x.r},${x.g},${x.b},${p.alpha/100})"></i>${p.name}`;
+  btn.addEventListener("click", () => {
+    const c = data[curTheme().id].panel;
+    c.h = p.h; c.s = p.s; c.v = p.v; c.alpha = p.alpha;
+    BLUR[curTheme().id] = p.blur;
+    activeItem = 0;
+    commit(); refreshStatus();
+  });
+  presetBox.appendChild(btn);
+});
+
+/* 复位 / 导出 */
+$("reset").addEventListener("click", () => {
+  const def = DEFAULT_DATA[curTheme().id][curItem().id];
+  if (def) Object.assign(curColor(), def);
+  else Object.assign(curColor(), C(0,0,1,100));
+  if (curItem().id === "panel") BLUR[curTheme().id] = { light:24, dark:28, ultra:32 }[curTheme().id];
+  commit();
+});
+
+/* 主题色面板 → 切到「主题色」项，用色轮精细调 */
+$("jumpAccent").addEventListener("click", () => {
+  const i = ITEMS.findIndex(it => it.id === "accent");
+  if (i >= 0){ activeItem = i; render(); refreshStatus(); }
+});
+
+/* 设备上实际在用的话筒图标（网页没上传过时用它兜底，保证导出的 JSON 自带图标） */
+async function micFromDevice(){
+  try{
+    const r = await fetch("/palette", { cache:"no-store" });
+    if (!r.ok) return "";
+    const j = await r.json();
+    const m = (j && j.mic_icon) || "";
+    if (m && m.startsWith("data:image")){
+      MIC_ICON = m;
+      syncMicUI();
+    }
+    return MIC_ICON || "";
+  }catch(e){ return MIC_ICON || ""; }
+}
+
+/* 读取手机配置：把设备上正在用的整份配色拉回页面（只回填，不回写手机） */
+$("readPhone").addEventListener("click", async () => {
+  const btn = $("readPhone"), old = btn.textContent;
+  btn.disabled = true; btn.textContent = "读取中…";
+  try {
+    const r = await fetch("/read-config", { cache:"no-store" });
+    let j = null;
+    try { j = await r.json(); } catch(e){}
+    if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+    const pal = j.palette;
+    if (!pal || typeof pal !== "object" || !Object.keys(pal).length) throw new Error("手机返回的配置为空");
+    applyImportedJSON(JSON.stringify(pal), true);
+    toast(`已读取手机配置${j.serial ? "（" + j.serial + "）" : ""}`);
+  } catch(e) {
+    toast("读取手机配置失败：" + ((e && e.message) || e));
+  } finally {
+    btn.disabled = false; btn.textContent = old;
+  }
+});
+
+$("export").addEventListener("click", async () => {
+  try{
+    const mic = await micFromDevice();
+    if (mic) MIC_ICON = mic;
+    // 导出 = 手机 live 文件同款全量结构：light/dark/ultra 三份（每份 40 项配色 + 圆角 + 描边 +
+    // 投影 + 高光 + 按下色 + 发送键三态 + 小字开关 + 渐变多色标），外加根部三个半径与话筒图标。
+    // 这样导出的文件既能直接丢进设备当 appearance-live.json，也能再导回页面做全量覆盖。
+    const out = buildPalette();
+    // 面板模糊半径也在页面里有滑块，一并写进每个主题
+    THEMES.forEach(t => { out[t.id].blurRadiusDp = BLUR[t.id]; });
+    const json = JSON.stringify(out, null, 2);
+    const blob = new Blob([json], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "wetype-dark-appearance.json";
+    a.rel = "noopener";
+    // 必须挂进文档再点，Safari / 部分 Chromium 壳子不认游离节点的 download
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { a.remove(); URL.revokeObjectURL(url); } catch(e){}
+    }, 1500);
+    toast(mic ? "已导出全量 JSON（含话筒图标）" : "已导出全量 JSON");
+  }catch(e){
+    toast("导出失败：" + ((e && e.message) || e));
+  }
+});
+
+/* ============================================================
+   导入 JSON
+   ============================================================ */
+const importInput = document.createElement("input");
+importInput.type = "file";
+importInput.accept = ".json,application/json,text/plain";
+// 挂到页面上（隐藏），这样也能被拖放/自动化直接投喂文件
+importInput.style.display = "none";
+importInput.id = "importFile";
+document.body.appendChild(importInput);
+
+$("import").addEventListener("click", () => importInput.click());
+importInput.addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) readImportFile(f);
+  importInput.value = "";
+});
+
+function readImportFile(file){
+  const r = new FileReader();
+  r.onload = () => applyImportedJSON(String(r.result || ""));
+  r.onerror = () => toast("文件读取失败");
+  r.readAsText(file);
+}
+
+/* #RRGGBB / #AARRGGBB → {h,s,v,alpha} */
+function colorFromHex(str){
+  let v = String(str).trim().replace(/^#/, "");
+  if (!/^([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) return null;
+  let alpha = 100;
+  if (v.length === 8){
+    alpha = Math.round(parseInt(v.slice(0,2), 16) / 255 * 100);
+    v = v.slice(2);
+  }
+  const r = parseInt(v.slice(0,2), 16), g = parseInt(v.slice(2,4), 16), b = parseInt(v.slice(4,6), 16);
+  const c = rgb2hsv(r, g, b);
+  return { h:c.h, s:c.s, v:c.v, alpha:clamp(alpha, 0, 100) };
+}
+
+/* 设备 live 文件里的字段名 → 页面里的配色项 id（两套命名不一样，必须显式对） */
+const FLAT_COLORS = [
+  ["panel_bg", "panel"], ["key_fill", "key"], ["key_text", "text"],
+  ["key_small_text", "smallText"], ["key_fn_text", "fnText"],
+  ["cand_bg", "candBg"], ["send_bg", "accent"], ["accent", "accent"],
+  ["logo_circle", "logoCircle"], ["logo_glyph", "logoIcon"], ["fn_icon", "fnIcon"]
+];
+
+/* 导入语义 = 全量覆盖（唯一语义）：先整份打回默认，再套用文件里的值。
+   文件里没有的项就是默认值，不会保留你手调过的旧值。
+   支持三种写法：
+   ① 导出格式 { themes:{ dark:{ accent:"#FF0086FF", blurRadiusDp:28 } } }
+   ② 单主题扁平 { accent:"#FF0086FF", panel:"#EBE2E2E2" }（自动套到三个模式）
+   ③ 完整存档（save() 那份，含 data/blur/radius/keyGrad/shadow/glow/press…） */
+function applyImportedJSON(text, noPush){
+  let p;
+  try { p = JSON.parse(text); } catch(e){ toast("JSON 解析失败"); return; }
+  if (!p || typeof p !== "object" || Array.isArray(p)){ toast("JSON 结构不对"); return; }
+  syncProfilesFrom(p);
+
+  // ③ 完整存档：直接走 applyState，字段校验完全复用存档那套逻辑
+  if (p.data && typeof p.data === "object"){
+    resetAll();
+    if (!applyState(p)){ toast("存档格式有误"); return; }
+    finishImport("已全量导入完整配置", !noPush);
+    return;
+  }
+
+  // ①②：主题包里逐个对颜色
+  const bag = (p.themes && typeof p.themes === "object") ? p.themes : p;
+  const single = !THEMES.some(t => bag[t.id]) && (bag.accent || bag.panel || bag.panelColor);
+  const state = { data:{}, blur:{} };
+  let hits = 0, miss = 0;
+
+  THEMES.forEach(t => {
+    const src = single ? bag : bag[t.id];
+    if (!src || typeof src !== "object") return;
+    state.data[t.id] = {};
+    ITEMS.forEach(it => {
+      const raw = (it.id === "accent" && src.accentColor) ? src.accentColor : src[it.id];
+      if (typeof raw !== "string") return;
+      const c = colorFromHex(raw);
+      if (c){ state.data[t.id][it.id] = c; hits++; }
+      else miss++;
+    });
+    const blur = src.blurRadiusDp;
+    if (typeof blur === "number"){ state.blur[t.id] = clamp(blur, 0, 40); hits++; }
+    // 渐变：多色标（设备文件里的 key_grad_stops）优先，其次 key_grad_c1/c2
+    if (Array.isArray(src.key_grad_stops) && src.key_grad_stops.length >= 2){
+      state.keyGradStops = state.keyGradStops || {};
+      state.keyGradStops[t.id] = src.key_grad_stops;
+      state.keyGradAngle = state.keyGradAngle || {};
+      if (typeof src.key_grad_angle === "number") state.keyGradAngle[t.id] = src.key_grad_angle;
+      state.keyGradAlpha = state.keyGradAlpha || {};
+      if (typeof src.key_grad_alpha === "number") state.keyGradAlpha[t.id] = clamp(src.key_grad_alpha, 0, 100);
+      hits++;
+    } else if (typeof src.key_grad_c1 === "string" && typeof src.key_grad_c2 === "string"){
+      state.keyGradStops = state.keyGradStops || {};
+      state.keyGradStops[t.id] = [{ p:0, c:src.key_grad_c1 }, { p:1, c:src.key_grad_c2 }];
+      state.keyGradAngle = state.keyGradAngle || {};
+      if (typeof src.key_grad_angle === "number") state.keyGradAngle[t.id] = src.key_grad_angle;
+      hits++;
+    }
+    if (typeof src.key_mode === "string"){ state.keyMode = state.keyMode || {}; state.keyMode[t.id] = src.key_mode; }
+
+    /* 设备 live 文件的扁平写法：这些项以前导入时会被丢掉，现在逐项搬进状态 */
+    FLAT_COLORS.forEach(([k, id]) => {
+      const raw = src[k];
+      if (typeof raw === "string" && raw){
+        const c = colorFromHex(raw);
+        if (c){ state.data[t.id][id] = c; hits++; }
+      }
+    });
+    if (typeof src.key_radius_dp === "number"){
+      state.radius = state.radius || {};
+      state.radius[t.id] = clamp(src.key_radius_dp, 0, 40);
+    }
+    if (typeof src.cand_radius_dp === "number"){
+      state.candRadius = state.candRadius || {};
+      state.candRadius[t.id] = clamp(src.cand_radius_dp, 0, 40);
+    }
+    if (typeof src.key_rim_px === "number"){
+      state.rim = state.rim || {};
+      state.rim[t.id] = clamp(src.key_rim_px, 0, 6);
+    }
+    if (typeof src.key_rim_alpha === "number"){
+      state.rimAlpha = state.rimAlpha || {};
+      state.rimAlpha[t.id] = clamp(src.key_rim_alpha, 0, 100);
+    }
+    // 描边模糊 / 色标 / 方向角 / 整体透明：以前读手机配置时被丢掉，
+    // 一存档就用页面自带的三段白色描边盖掉手机上的四段，现在原样回读。
+    if (typeof src.key_rim_blur === "number"){
+      state.rimBlur = state.rimBlur || {};
+      state.rimBlur[t.id] = clamp(src.key_rim_blur, 0, 8);
+    }
+    if (Array.isArray(src.key_rim_stops) && src.key_rim_stops.length >= 2){
+      state.rimGrad = state.rimGrad || {};
+      state.rimGrad[t.id] = {
+        angle: typeof src.key_rim_angle === "number" ? src.key_rim_angle : 90,
+        alpha: clamp(typeof src.key_rim_alpha_all === "number" ? src.key_rim_alpha_all : 100, 0, 100),
+        stops: src.key_rim_stops.map(s => {
+          const c = colorFromHex(s && s.c) || { h:0, s:0, v:1, alpha:100 };
+          return {
+            p: clamp(typeof (s && s.p) === "number" ? s.p : 0, 0, 1),
+            c: { ...c, alpha: clamp(typeof (s && s.a) === "number" ? s.a : 100, 0, 100) }
+          };
+        })
+      };
+    }
+    if (typeof src.key_shadow === "string" || typeof src.key_shadow_alpha === "number"){
+      state.shadow = state.shadow || {};
+      const sv = state.shadow[t.id] = {};
+      if (/^#[0-9a-fA-F]{6}$/.test(String(src.key_shadow || ""))) sv.color = String(src.key_shadow).toUpperCase();
+      if (typeof src.key_shadow_alpha === "number") sv.alpha = clamp(src.key_shadow_alpha, 0, 100);
+      if (typeof src.key_shadow_blur_dp === "number") sv.blur = clamp(src.key_shadow_blur_dp, 0, 24);
+      if (typeof src.key_shadow_dy_dp === "number") sv.dy = clamp(src.key_shadow_dy_dp, 0, 24);
+    }
+    if (typeof src.top_glow_alpha === "number" || typeof src.top_glow_px === "number"){
+      state.glow = state.glow || {};
+      state.glow[t.id] = {
+        alpha: clamp(typeof src.top_glow_alpha === "number" ? src.top_glow_alpha : 100, 0, 100),
+        px:    clamp(typeof src.top_glow_px === "number" ? src.top_glow_px : 30, 0, 120),
+        w:     clamp(typeof src.top_glow_width === "number" ? src.top_glow_width : 2, 0, 8)
+      };
+    }
+    if (typeof src.key_press_bg === "string"){
+      const raw = src.key_press_bg.trim();
+      const c = raw ? colorFromHex(raw) : null;
+      state.press = state.press || {};
+      state.press[t.id] = { on: !!c, color: c ? "#" + raw.replace(/^#/, "").slice(-6).toUpperCase() : "#EDEDED" };
+    }
+    if (typeof src.send_active_text === "string" || typeof src.send_grey_bg === "string"){
+      const pick = (v, dft) => (/^#[0-9a-fA-F]{6}$/.test(String(v || "")) ? String(v).toUpperCase() : dft);
+      state.send = state.send || {};
+      state.send[t.id] = {
+        aText: pick(src.send_active_text, SEND[t.id].aText),
+        gBg:   pick(src.send_grey_bg, SEND[t.id].gBg),
+        gText: pick(src.send_grey_text, SEND[t.id].gText),
+        dBg:   pick(src.send_disabled_bg, SEND[t.id].dBg),
+        dText: pick(src.send_disabled_text, SEND[t.id].dText),
+        dAlpha: clamp(typeof src.send_disabled_alpha === "number" ? src.send_disabled_alpha : SEND[t.id].dAlpha, 0, 100),
+        mask:   clamp(typeof src.send_mask_alpha === "number" ? src.send_mask_alpha : SEND[t.id].mask, 0, 100)
+      };
+    }
+    // 键帽小字 / 手势小字在这份文件里是有值的，就打开对应的「独立配色」开关
+    if (typeof src.key_small_text === "string" && src.key_small_text){
+      state.indep = state.indep || {};
+      state.indep[t.id] = state.indep[t.id] || {};
+      state.indep[t.id].small = true;
+    }
+    if (typeof src.key_fn_text === "string" && src.key_fn_text){
+      state.indep = state.indep || {};
+      state.indep[t.id] = state.indep[t.id] || {};
+      state.indep[t.id].fn = true;
+    }
+  });
+
+  // 根节点上的形状/高光/投影等参数：文件里没有 → 保持 resetAll() 之后的默认值
+  ["radius","candRadius","rim","rimAlpha","keyMode","keyGrad","shadow","glow","press","indep"].forEach(k => {
+    if (p[k] && typeof p[k] === "object"){ state[k] = p[k]; hits++; }
+  });
+  if (typeof p.panelRadius === "number") state.panelRadius = clamp(p.panelRadius, 0, 40);
+  if (typeof p.panel_radius_dp === "number") state.panelRadius = clamp(p.panel_radius_dp, 0, 40);
+  // 话筒图标：兼容页面存档的 micIcon 与导出文件的 mic_icon
+  const micRaw =
+    (typeof p.mic_icon === "string" && p.mic_icon.startsWith("data:image")) ? p.mic_icon :
+    (typeof p.micIcon === "string" && p.micIcon.startsWith("data:image")) ? p.micIcon : "";
+  if (micRaw) state.micIcon = micRaw;
+
+  if (!hits){ toast("没找到可导入的颜色"); return; }
+
+  // 文件内容明显不完整时先确认一次：全量覆盖会把其余项全部打回默认
+  const total = THEMES.length * ITEMS.length;
+  const lost = total - (hits - (Object.keys(state.blur).length));
+  if (lost > 0 && lost >= total / 2 && !confirm(`文件只带 ${total - lost} / ${total} 项颜色，导入后其余 ${lost} 项会全部回到默认，继续？`)){
+    return;
+  }
+
+  resetAll();   // 全量覆盖：文件没写的项回到默认
+  if (!applyState(state)){ toast("导入失败"); return; }
+  finishImport(miss ? `已全量导入（${miss} 个颜色格式不对已跳过）` : "已全量覆盖导入", !noPush);
+}
+
+function finishImport(msg, push){
+  try { syncMicUI(); } catch(e){}
+  save();
+  render();
+  if (typeof renderShadow === "function") renderShadow();
+  if (typeof renderSend === "function") renderSend();
+  try { applyGlowPreview(); } catch(e){}
+  try { applyPressPreview(); } catch(e){}
+  if (push !== false) queueApply(true);
+  toast(msg);
+}
+
+/* 拖一个 .json 到页面上也能导入 */
+document.addEventListener("dragover", (e) => {
+  if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault();
+});
+document.addEventListener("drop", (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (!/^(application\/json|text\/plain)$/.test(f.type) && !/^.*\.json$/i.test(f.name)) return;
+  e.preventDefault();
+  readImportFile(f);
+});
+
+function toast(text){
+  const el = $("applyText");
+  if (!el) return;
+  el.textContent = text;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(refreshStatus, 1500);
+}
+
+/* ============================================================
+   图片取色
+   ============================================================ */
+const drop = $("drop"), imgwrap = $("imgwrap"), canvas = $("imgCanvas");
+const ctx = canvas.getContext("2d", { willReadFrequently:true });
+const imgPalBox = $("imgPal");
+const fileInput = document.createElement("input");
+fileInput.type = "file";
+fileInput.accept = "image/*";
+
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => { if (e.target.files?.[0]) loadFile(e.target.files[0]); });
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.style.borderColor = "var(--ink)"; });
+drop.addEventListener("dragleave", () => { drop.style.borderColor = ""; });
+drop.addEventListener("drop", (e) => {
+  e.preventDefault(); drop.style.borderColor = "";
+  const f = e.dataTransfer.files?.[0];
+  if (f) loadFile(f);
+});
+document.addEventListener("paste", (e) => {
+  const items = e.clipboardData?.items || [];
+  for (const it of items){
+    if (it.type.startsWith("image/")){ loadFile(it.getAsFile()); break; }
+  }
+});
+
+/* ---------- 自定义话筒图标 ---------- */
+const micDrop = $("micDrop"), micWrap = $("micWrap"), micThumb = $("micThumb"), micReset = $("micReset");
+const micInput = document.createElement("input");
+micInput.type = "file";
+micInput.accept = "image/*";
+micDrop.addEventListener("click", () => micInput.click());
+micInput.addEventListener("change", (e) => { if (e.target.files?.[0]) loadMicIcon(e.target.files[0]); });
+micDrop.addEventListener("dragover", (e) => { e.preventDefault(); micDrop.style.borderColor = "var(--ink)"; });
+micDrop.addEventListener("dragleave", () => { micDrop.style.borderColor = ""; });
+micDrop.addEventListener("drop", (e) => {
+  e.preventDefault(); micDrop.style.borderColor = "";
+  const f = e.dataTransfer.files?.[0];
+  if (f) loadMicIcon(f);
+});
+micReset.addEventListener("click", () => { MIC_ICON = null; syncMicUI(); commit(); });
+
+/* 上传的图先缩到 160px 以内再转 PNG，避免 JSON 里塞进几 MB 的 base64 */
+function loadMicIcon(file){
+  if (!file || !file.type.startsWith("image/")) return;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    const max = 160;
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0, w, h);
+    MIC_ICON = c.toDataURL("image/png");
+    syncMicUI();
+    commit();
+  };
+  img.onerror = () => { micDrop.textContent = "图标读取失败"; };
+  img.src = url;
+}
+
+/* 同步左侧缩略图 + 预览里的空格键图标 */
+function syncMicUI(){
+  micThumb.src = MIC_ICON || "";
+  micWrap.style.display = MIC_ICON ? "block" : "none";
+  micDrop.textContent = MIC_ICON ? "点这里换一张（PNG / 透明底）" : "拖入图标 / 点击选择";
+  document.querySelectorAll(".panel .mic").forEach(el => {
+    if (MIC_ICON){
+      el.innerHTML = '<img src="' + MIC_ICON + '" alt="">';
+      el.style.opacity = "1";
+    } else {
+      el.innerHTML = ICON.mic;
+      el.style.opacity = "";
+    }
+  });
+}
+
+function loadFile(file){
+  if (!file || !file.type.startsWith("image/")) return;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    imgwrap.style.display = "block";
+    drop.textContent = "点图片任意位置取色";
+    buildImagePalette();
+  };
+  img.onerror = () => { drop.textContent = "图片读取失败"; };
+  img.src = url;
+}
+
+canvas.addEventListener("click", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left)/rect.width * canvas.width);
+  const y = Math.floor((e.clientY - rect.top)/rect.height * canvas.height);
+  const p = ctx.getImageData(x,y,1,1).data;
+  if (setFromHex("#" + hex2(p[0])+hex2(p[1])+hex2(p[2]), false)) commit();
+});
+
+function buildImagePalette(){
+  const d = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  const px = [];
+  for (let i=0;i<d.length;i+=8){ if (d[i+3] < 200) continue; px.push([d[i],d[i+1],d[i+2]]); }
+  const colors = medianCut(px, 8);
+  imgPalBox.innerHTML = "";
+  colors.forEach(([r,g,b]) => {
+    const hx = "#" + hex2(r)+hex2(g)+hex2(b);
+    const btn = document.createElement("button");
+    btn.style.background = hx;
+    btn.title = hx;
+    btn.addEventListener("click", () => { if (setFromHex(hx, false)) commit(); });
+    imgPalBox.appendChild(btn);
+  });
+}
+function medianCut(pixels, count){
+  if (!pixels.length) return [];
+  let boxes = [pixels];
+  while (boxes.length < count){
+    let idx = -1, best = -1;
+    boxes.forEach((b, i) => {
+      if (b.length < 2) return;
+      const range = channelRange(b);
+      if (range > best){ best = range; idx = i; }
+    });
+    if (idx < 0) break;
+    const box = boxes[idx], ch = widestChannel(box);
+    const sorted = box.slice().sort((p,q) => p[ch]-q[ch]);
+    const mid = Math.floor(sorted.length/2);
+    boxes.splice(idx, 1, sorted.slice(0,mid), sorted.slice(mid));
+  }
+  return boxes.filter(b => b.length).map(b => {
+    const s = b.reduce((a,p) => [a[0]+p[0], a[1]+p[1], a[2]+p[2]], [0,0,0]);
+    return { rgb:[Math.round(s[0]/b.length), Math.round(s[1]/b.length), Math.round(s[2]/b.length)], n:b.length };
+  }).sort((a,b) => b.n-a.n).slice(0,count).map(v => v.rgb);
+}
+function channelRange(b){
+  let rmin=255,rmax=0,gmin=255,gmax=0,bmin=255,bmax=0;
+  for (const p of b){
+    rmin=Math.min(rmin,p[0]); rmax=Math.max(rmax,p[0]);
+    gmin=Math.min(gmin,p[1]); gmax=Math.max(gmax,p[1]);
+    bmin=Math.min(bmin,p[2]); bmax=Math.max(bmax,p[2]);
+  }
+  return Math.max(rmax-rmin, gmax-gmin, bmax-bmin);
+}
+function widestChannel(b){
+  const mins=[255,255,255], maxs=[0,0,0];
+  for (const p of b) for (let i=0;i<3;i++){ mins[i]=Math.min(mins[i],p[i]); maxs[i]=Math.max(maxs[i],p[i]); }
+  const ranges=[maxs[0]-mins[0], maxs[1]-mins[1], maxs[2]-mins[2]];
+  return ranges.indexOf(Math.max(...ranges));
+}
+
+/* ============================================================
+   存取
+   ============================================================ */
+/* ============================================================
+   上一步 / 下一步（最多 50 步）
+   ============================================================ */
+const HIST_MAX = 50;
+let hist = [], histPtr = -1, histReady = false, histLocked = false, histAt = 0;
+
+function snapNow(){
+  return JSON.stringify({ data, blur:BLUR, radius:RADIUS, candRadius:CAND_RADIUS,
+    panelRadius:PANEL_RADIUS, micIcon:MIC_ICON, rim:RIM, rimAlpha:RIM_A, rimBlur:RIM_BLUR, rimGrad:RIMGRAD,
+    send:SEND, keyMode:KEYMODE, keyGrad:KEYGRAD, shadow:SHADOW, glow:GLOW,
+    press:PRESS, indep:INDEP });
+}
+function histNote(){
+  if (!histReady || histLocked) return;
+  const snap = snapNow();
+  if (histPtr >= 0 && hist[histPtr] === snap){ renderUndoBar(); return; }
+  const now = Date.now();
+  // 一次拖动会连发几十个 input 事件：400ms 内的改动并成一步
+  if (histPtr >= 0 && now - histAt < 400){ hist[histPtr] = snap; histAt = now; renderUndoBar(); return; }
+  hist = hist.slice(0, histPtr + 1);
+  hist.push(snap);
+  if (hist.length > HIST_MAX){ hist.shift(); }
+  histPtr = hist.length - 1;
+  histAt = now;
+  renderUndoBar();
+}
+function histReset(){
+  hist = [snapNow()];
+  histPtr = 0;
+  histReady = true;
+  histAt = 0;
+  renderUndoBar();
+}
+function histGo(delta){
+  const np = histPtr + delta;
+  if (np < 0 || np >= hist.length) return;
+  histPtr = np;
+  histLocked = true;
+  try{
+    applyState(JSON.parse(hist[histPtr]));
+    render();
+    save();          // histLocked 期间不记录新步骤
+  } finally {
+    histLocked = false;
+  }
+  histAt = 0;
+  if (online) sendApply();   // 撤销 / 重做也要落回手机（没连设备就不打扰）
+  renderUndoBar();
+}
+function renderUndoBar(){
+  const u = $("undoBtn"), r = $("redoBtn"), c = $("undoCnt");
+  if (!u || !r) return;
+  u.disabled = histPtr <= 0;
+  r.disabled = histPtr >= hist.length - 1;
+  if (c) c.textContent = (histPtr + 1) + " / " + hist.length;
+}
+
+function save(){
+  // 当前这组配色随时回写到它所属的主题档案，切主题时才能整份回来
+  if (PROFILES && activeProfile && typeof buildPaletteRaw === "function") PROFILES[activeProfile] = snapshotProfile();
+  try{ localStorage.setItem("wetype-dark.themes4", JSON.stringify({ data, blur:BLUR, radius:RADIUS, candRadius:CAND_RADIUS, panelRadius:PANEL_RADIUS, micIcon:MIC_ICON, rim:RIM, rimAlpha:RIM_A, rimBlur:RIM_BLUR, rimGrad:RIMGRAD, send:SEND, keyMode:KEYMODE, keyGrad:KEYGRAD, shadow:SHADOW, glow:GLOW, press:PRESS, indep:INDEP })); }catch(e){}
+  persistProfiles();
+  histNote();
+}
+function applyState(s){
+  try{
+      if (s && s.data){
+        THEMES.forEach(t => ITEMS.forEach(it => {
+          const v = s.data[t.id]?.[it.id];
+          if (v && typeof v.h === "number"){
+            data[t.id][it.id] = { h:v.h, s:clamp(v.s,0,1), v:clamp(v.v,0,1), alpha:clamp(v.alpha,0,100) };
+          }
+        }));
+        if (s.blur) THEMES.forEach(t => { if (typeof s.blur[t.id] === "number") BLUR[t.id] = clamp(s.blur[t.id],0,40); });
+        if (s.radius) THEMES.forEach(t => { if (typeof s.radius[t.id] === "number") RADIUS[t.id] = clamp(s.radius[t.id],0,40); });
+        if (s.candRadius) THEMES.forEach(t => { if (typeof s.candRadius[t.id] === "number") CAND_RADIUS[t.id] = clamp(s.candRadius[t.id],0,40); });
+        if (typeof s.panelRadius === "number") PANEL_RADIUS = clamp(s.panelRadius,0,40);
+        if (typeof s.micIcon === "string" && s.micIcon.startsWith("data:image")) MIC_ICON = s.micIcon;
+        THEMES.forEach(t => { RADIUS[t.id] = RADIUS[THEMES[0].id]; CAND_RADIUS[t.id] = CAND_RADIUS[THEMES[0].id]; });
+        if (s.rim) THEMES.forEach(t => { if (typeof s.rim[t.id] === "number") RIM[t.id] = clamp(s.rim[t.id],0,6); });
+        if (s.rimAlpha) THEMES.forEach(t => { if (typeof s.rimAlpha[t.id] === "number") RIM_A[t.id] = clamp(s.rimAlpha[t.id],0,100); });
+        if (s.rimBlur) THEMES.forEach(t => { if (typeof s.rimBlur[t.id] === "number") RIM_BLUR[t.id] = clamp(s.rimBlur[t.id],0,8); });
+        if (s.rimGrad) THEMES.forEach(t => { if (s.rimGrad[t.id]) restoreInto(RIMGRAD[t.id], s.rimGrad[t.id]); });
+        if (s.send) THEMES.forEach(t => {
+          const sd = s.send[t.id];
+          if (!sd) return;
+          ["aText","gBg","gText","dBg","dText"].forEach(k => {
+            if (typeof sd[k] === "string" && /^#[0-9a-fA-F]{6}$/.test(sd[k])) SEND[t.id][k] = sd[k].toUpperCase();
+          });
+          ["dAlpha","mask"].forEach(k => { if (typeof sd[k] === "number") SEND[t.id][k] = clamp(sd[k],0,100); });
+        });
+        // 老存档把暗色 / 极暗的「可发送文字」存成了黑色：打字时发送键在可发送 ↔ 禁用之间切换，
+        // 可发送用黑字、禁用用白字，看着就是黑白黑白地闪。读到黑就补成白色（亮色本来就是白）。
+        if (SEND.dark.aText === "#000000") SEND.dark.aText = "#FFFFFF";
+        if (SEND.ultra.aText === "#000000") SEND.ultra.aText = "#FFFFFF";
+        if (s.glow) THEMES.forEach(t => {
+          const gv = s.glow[t.id];
+          if (!gv) return;
+          if (typeof gv.alpha === "number") GLOW[t.id].alpha = clamp(gv.alpha,0,100);
+          if (typeof gv.px === "number") GLOW[t.id].px = clamp(gv.px,0,120);
+          if (typeof gv.w === "number") GLOW[t.id].w = clamp(gv.w,0,8);
+        });
+        if (s.shadow) THEMES.forEach(t => {
+          const sv = s.shadow[t.id];
+          if (!sv) return;
+          if (typeof sv.color === "string" && /^#[0-9a-fA-F]{6}$/.test(sv.color)) SHADOW[t.id].color = sv.color.toUpperCase();
+          if (typeof sv.blur === "number") SHADOW[t.id].blur = clamp(sv.blur,0,24);
+          if (typeof sv.alpha === "number") SHADOW[t.id].alpha = clamp(sv.alpha,0,100);
+          if (typeof sv.dy === "number") SHADOW[t.id].dy = clamp(sv.dy,0,24);
+        });
+        if (s.press){
+          if (s.press.light || s.press.dark || s.press.ultra){
+            THEMES.forEach(t => {
+              const pv = s.press[t.id];
+              if (!pv) return;
+              if (typeof pv.on === "boolean") PRESS[t.id].on = pv.on;
+              if (typeof pv.color === "string" && /^#[0-9a-fA-F]{6}$/.test(pv.color)) PRESS[t.id].color = pv.color.toUpperCase();
+            });
+          } else {
+            // 老存档只有一个全局按下色：那份是当亮色用的，只补给亮色；
+            // 暗色 / 极暗保持各自的默认值，别又变成「一套」。
+            if (typeof s.press.on === "boolean") PRESS.light.on = s.press.on;
+            if (typeof s.press.color === "string" && /^#[0-9a-fA-F]{6}$/.test(s.press.color)) PRESS.light.color = s.press.color.toUpperCase();
+          }
+        }
+        if (s.indep) THEMES.forEach(t => {
+          const iv = s.indep[t.id];
+          if (!iv) return;
+          if (typeof iv.small === "boolean") INDEP[t.id].small = iv.small;
+          if (typeof iv.fn === "boolean") INDEP[t.id].fn = iv.fn;
+        });
+        if (s.keyMode) THEMES.forEach(t => { if (s.keyMode[t.id]) KEYMODE[t.id] = s.keyMode[t.id]; });
+        if (s.keyGradStops) THEMES.forEach(t => {
+          const arr = s.keyGradStops[t.id];
+          if (Array.isArray(arr) && arr.length >= 2) {
+            const sts = arr.map(x => {
+              const cc = colorFromHex(x.c);
+              return cc ? { p: clamp(Math.round((Number(x.p) || 0) * 1000) / 1000, 0, 1), c: cc } : null;
+            }).filter(Boolean);
+            if (sts.length >= 2) { KEYGRAD[t.id].stops = sts; gradStop = 0; }
+          } else {
+            const k1 = colorFromHex(s.keyGradC1?.[t.id]), k2 = colorFromHex(s.keyGradC2?.[t.id]);
+            if (k1 && k2) { KEYGRAD[t.id].stops = [{ p:0, c:k1 }, { p:1, c:k2 }]; gradStop = 0; }
+          }
+          if (typeof s.keyGradAngle?.[t.id] === "number") KEYGRAD[t.id].angle = clamp(s.keyGradAngle[t.id], 0, 360);
+        });
+        if (s.keyGradAlpha) THEMES.forEach(t => {
+          if (typeof s.keyGradAlpha[t.id] === "number") KEYGRAD[t.id].alpha = clamp(s.keyGradAlpha[t.id], 0, 100);
+        });
+        if (s.keyGrad) THEMES.forEach(t => {
+          const gv = s.keyGrad[t.id];
+          if (gv) {
+            if (Array.isArray(gv.stops) && gv.stops.length >= 2) {
+              KEYGRAD[t.id].stops = gv.stops.map(x => ({
+                p: clamp(Number(x.p) || 0, 0, 1),
+                c: { h:Number(x.c.h)||0, s:clamp(x.c.s,0,1), v:clamp(x.c.v,0,1), alpha:clamp(x.c.alpha ?? 100,0,100) }
+              }));
+            } else {
+              ["c1","c2"].forEach(k => {
+                const v = gv[k];
+                if (v && typeof v.h === "number") KEYGRAD[t.id].stops[k === "c1" ? 0 : 1] =
+                  { p: k === "c1" ? 0 : 1, c:{ h:v.h, s:clamp(v.s,0,1), v:clamp(v.v,0,1), alpha:clamp(v.alpha,0,100) } };
+              });
+            }
+            if (typeof gv.angle === "number") KEYGRAD[t.id].angle = clamp(gv.angle,0,360);
+            // 整体透明也必须回读，否则刷新后 slider 又回到 100%
+            if (typeof gv.alpha === "number") KEYGRAD[t.id].alpha = clamp(gv.alpha, 0, 100);
+          }
+        });
+      }
+    return true;
+  }catch(e){ return false; }
+}
+function load(){
+  try{
+    const raw = localStorage.getItem("wetype-dark.themes4");
+    if (raw) applyState(JSON.parse(raw));
+    const rec = localStorage.getItem("wetype-dark.recents4");
+    if (rec) recents = JSON.parse(rec) || [];
+  }catch(e){}
+}
+
+/* ============================================================
+   右侧数值手输：点一下那个值就能直接敲数字 / 十六进制
+   ============================================================ */
+const VAL_TARGETS = { aVal:"aRange", vVal:"vRange" };
+
+function bindValEditing(){
+  const spans = document.querySelectorAll('.val[id$="Val"]');
+  spans.forEach(span => {
+    const ctrl = $(VAL_TARGETS[span.id] || span.id.slice(0, -3));
+    if (!ctrl) return;
+    span.classList.add("editable");
+    span.title = "点一下手输";
+    span.addEventListener("click", () => startValEdit(span, ctrl));
+  });
+}
+
+function startValEdit(span, ctrl){
+  if (span.dataset.edit === "1") return;
+  span.dataset.edit = "1";
+  const isColor = ctrl.type === "color";
+  const text = span.textContent.trim();
+  const raw = isColor ? text.replace(/#/g, "") : text.replace(/[^0-9.\-]/g, "");
+  span.classList.add("editing");
+  const box = document.createElement("input");
+  box.className = "val-edit";
+  box.type = "text";
+  box.value = raw;
+  span.textContent = "";
+  span.appendChild(box);
+  box.focus();
+  box.select();
+
+  const finish = (commit) => {
+    if (span.dataset.edit !== "1") return;
+    span.dataset.edit = "0";
+    let applied = false;
+    if (commit && isColor){
+      const v = box.value.trim().replace(/#/g, "");
+      if (/^[0-9a-fA-F]{6}$/.test(v)){
+        ctrl.value = "#" + v.toLowerCase();
+        applied = true;
+      }
+    } else if (commit){
+      let num = Number(box.value.replace(/[^0-9.\-]/g, ""));
+      if (isFinite(num)){
+        const min = ctrl.min === "" ? -Infinity : Number(ctrl.min);
+        const max = ctrl.max === "" ? Infinity : Number(ctrl.max);
+        const step = ctrl.step === "" ? 0 : Number(ctrl.step);
+        if (step > 0){
+          const base = isFinite(min) ? min : 0;
+          num = base + Math.round((num - base) / step) * step;
+        }
+        num = Math.min(isFinite(max) ? max : num, Math.max(isFinite(min) ? min : num, num));
+        ctrl.value = String(Number(num.toFixed(4)));
+        applied = true;
+      }
+    }
+    span.classList.remove("editing");
+    // 交给原来的 handler 去改数据、刷新文案、下发手机
+    if (applied) ctrl.dispatchEvent(new Event("input", { bubbles: true }));
+    else span.textContent = isColor ? raw.toUpperCase() : raw;
+  };
+
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if (e.key === "Escape"){ e.preventDefault(); finish(false); }
+  });
+  box.addEventListener("blur", () => finish(true));
+  box.addEventListener("click", (e) => e.stopPropagation());
+}
+
+/* ============================================================
+   启动
+   ============================================================ */
+load();
+loadProfiles();
+renderProfiles();
+buildPanel();
+bindGlow();
+bindPress();
+bindValEditing();
+render();
+histReset();
+refreshStatus();
+ping();
+setInterval(ping, 2500);
+
+document.addEventListener("pointerup", () => {
+  document.querySelectorAll(".k.press").forEach(k => k.classList.remove("press"));
+});
+
+/* ============================================================
+   Figma 式调色条：拖动时浮出数值气泡
+   ============================================================ */
+function attachFxBubble(input, fmt){
+  const field = input.closest(".field") || input.parentElement;
+  if (!field) return;
+  field.style.position = "relative";
+  const b = document.createElement("div");
+  b.className = "fx-bubble";
+  field.appendChild(b);
+  let hideTimer = null;
+  const show = () => {
+    const min = Number(input.min || 0), max = Number(input.max || 100);
+    const v = Number(input.value);
+    const pct = (v - min) / Math.max(1, max - min);
+    const ir = input.getBoundingClientRect(), fr = field.getBoundingClientRect();
+    b.textContent = fmt(v);
+    b.style.left = (ir.left - fr.left + ir.width * pct) + "px";
+    b.classList.add("show");
+  };
+  const hide = () => b.classList.remove("show");
+  input.addEventListener("pointerdown", () => { clearTimeout(hideTimer); show(); });
+  input.addEventListener("input", show);
+  input.addEventListener("pointerup", () => { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 500); });
+  input.addEventListener("pointercancel", hide);
+  input.addEventListener("blur", hide);
+  input.addEventListener("keydown", () => { show(); clearTimeout(hideTimer); hideTimer = setTimeout(hide, 700); });
+}
+attachFxBubble($("vRange"), v => Math.round(Number(v)) + "%");
+attachFxBubble($("aRange"), v => Math.round(Number(v)) + "%");
+attachFxBubble($("gAlpha"), v => Math.round(Number(v)) + "%");
+
+/* ============================================================
+   自绘右键菜单（屏蔽 Safari 默认菜单）
+   ============================================================ */
+const ctxMenu = document.createElement("div");
+ctxMenu.id = "ctxMenu";
+document.body.appendChild(ctxMenu);
+let ctxOpen = false;
+
+function closeCtx(){
+  ctxOpen = false;
+  ctxMenu.classList.remove("show");
+}
+
+function copyText(text){
+  const legacy = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch(e) { return false; }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(() => true).catch(() => legacy());
+  }
+  return Promise.resolve(legacy());
+}
+
+function openCtx(x, y, items){
+  ctxMenu.innerHTML = "";
+  items.forEach((it) => {
+    if (it.sep){
+      const sp = document.createElement("div");
+      sp.className = "sep";
+      ctxMenu.appendChild(sp);
+      return;
+    }
+    if (it.cap){
+      const cp = document.createElement("div");
+      cp.className = "cap";
+      cp.textContent = it.cap;
+      ctxMenu.appendChild(cp);
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.disabled = !!it.disabled;
+    const lb = document.createElement("span");
+    lb.textContent = it.label;
+    btn.appendChild(lb);
+    if (it.hint){
+      const hk = document.createElement("span");
+      hk.className = "k";
+      hk.textContent = it.hint;
+      btn.appendChild(hk);
+    }
+    if (!it.disabled) {
+      btn.addEventListener("click", () => { closeCtx(); try { it.fn(); } catch(e){ toast("操作失败：" + e.message); } });
+    }
+    ctxMenu.appendChild(btn);
+  });
+  ctxMenu.classList.add("show");
+  ctxMenu.style.left = "0px";
+  ctxMenu.style.top = "0px";
+  const r = ctxMenu.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  ctxMenu.style.left = Math.max(6, Math.min(x, vw - r.width - 8)) + "px";
+  ctxMenu.style.top  = Math.max(6, Math.min(y, vh - r.height - 8)) + "px";
+  ctxOpen = true;
+}
+
+function menuFor(target){
+  const hexNow = () => hex8(curColor()).toUpperCase();
+
+  const handle = target.closest(".grad-handle");
+  if (handle){
+    const idx = Number(handle.dataset.idx);
+    const st = gradStops()[idx];
+    const sc = st ? hex8(st.c).toUpperCase() : hexNow();
+    return [
+      { cap: "色标 " + (st ? Math.round(st.p * 100) + "%" : "") },
+      { label: "删除此色标", hint: "Del", disabled: gradStops().length <= 2,
+        fn: () => { gradStop = idx; deleteGradStop(); } },
+      { label: "复制这个色值", hint: sc, fn: () => copyText(sc).then(ok => toast(ok ? "已复制 " + sc : "复制失败")) },
+      { label: "居中到 50%", fn: () => { gradStop = idx; gradStops()[idx].p = .5; render(); commit(); } },
+      { label: "在右侧插入色标", disabled: gradStops().length >= 8,
+        fn: () => { const p = Math.min(1, (st ? st.p : .5) + .05); addGradStopAt(p, sampleGradient(p)); commit(); } },
+      { sep: true },
+      { label: "读取手机配置", fn: () => $("readPhone").click() }
+    ];
+  }
+
+  if (target.closest("#gradRamp")){
+    const r = gradRect();
+    return [
+      { cap: "渐变色带" },
+      { label: "在此添加色标", disabled: gradStops().length >= 8,
+        fn: () => {
+          const p = gradP(r.left + r.width * .5);
+          addGradStopAt(p, sampleGradient(p)); commit();
+        } },
+      { label: "反转色标顺序", fn: () => {
+        const st = gradStops();
+        st.forEach(x => { x.p = Math.round((1 - x.p) * 1000) / 1000; });
+        render(); commit();
+      } },
+      { label: "复位为两端色", fn: () => {
+        const tid = curTheme().id, base = data[tid].key;
+        KEYGRAD[tid].stops = [
+          { p: 0, c: { h: base.h, s: base.s, v: base.v, alpha: base.alpha } },
+          { p: 1, c: { h: base.h, s: base.s, v: Math.max(0, base.v * .82), alpha: base.alpha } }
+        ];
+        gradStop = 0; render(); commit();
+      } },
+      { sep: true },
+      { label: "复制整组色标", fn: () => {
+        const txt = sortedStopsFor(curTheme().id).map(x => Math.round(x.p * 1000) / 10 + "% " + hex8(x.c).toUpperCase()).join("\n");
+        copyText(txt).then(ok => toast(ok ? "已复制色标" : "复制失败"));
+      } }
+    ];
+  }
+
+  if (target === $("vRange")){
+    return [
+      { cap: "明度" },
+      { label: "设为 100%", hint: "最亮", fn: () => { curColor().v = 1; commit(); } },
+      { label: "设为 50%", fn: () => { curColor().v = .5; commit(); } },
+      { label: "设为 0%", hint: "纯黑", fn: () => { curColor().v = 0; commit(); } }
+    ];
+  }
+
+  if (target === $("aRange") || target.closest(".alpha-track")){
+    return [
+      { cap: "透明度" },
+      { label: "设为 100%", hint: "不透明", fn: () => { curColor().alpha = 100; commit(); } },
+      { label: "设为 50%", fn: () => { curColor().alpha = 50; commit(); } },
+      { label: "设为 0%", hint: "全透明", fn: () => { curColor().alpha = 0; commit(); } }
+    ];
+  }
+
+  const sw = target.closest(".sw");
+  if (sw && sw.dataset.c){
+    const c = sw.dataset.c.toUpperCase();
+    return [
+      { cap: c },
+      { label: "应用为当前颜色", fn: () => { if (setFromHex(c, false)) commit(); } },
+      { label: "复制色值", fn: () => copyText(c).then(ok => toast(ok ? "已复制 " + c : "复制失败")) }
+    ];
+  }
+
+  return [
+    { cap: "调色台" },
+    { label: "读取手机配置", fn: () => $("readPhone").click() },
+    { label: "导出 JSON", fn: () => $("export").click() },
+    { label: "复制当前色值", hint: hexNow(), fn: () => copyText(hexNow()).then(ok => toast(ok ? "已复制 " + hexNow() : "复制失败")) },
+    { sep: true },
+    { label: "刷新页面", hint: "⌘R", fn: () => location.reload() }
+  ];
+}
+
+window.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const items = menuFor(e.target);
+  if (items && items.length) openCtx(e.clientX, e.clientY, items);
+}, true);
+
+window.addEventListener("pointerdown", (e) => {
+  if (ctxOpen && !ctxMenu.contains(e.target)) closeCtx();
+}, true);
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeCtx();
+});
+window.addEventListener("blur", closeCtx);
+window.addEventListener("resize", closeCtx);
+window.addEventListener("scroll", closeCtx, true);
+
+// 左右栏宽度拖拽
+(function () {
+  const layout = document.querySelector(".layout");
+  if (!layout) return;
+  const LEFT_DEFAULT = 206, RIGHT_DEFAULT = 300;
+  const LEFT_MIN = 140, RIGHT_MIN = 220, CENTER_MIN = 360;
+  const KEY = "liveColors.cols";
+  const total = () => layout.getBoundingClientRect().width - 16;
+
+  function apply(left, right) {
+    layout.style.setProperty("--leftW", left + "px");
+    layout.style.setProperty("--rightW", right + "px");
+  }
+  function clampLeft(v, right) {
+    const max = Math.max(LEFT_MIN, total() - right - CENTER_MIN);
+    return Math.min(Math.max(v, LEFT_MIN), max);
+  }
+  function clampRight(v, left) {
+    const max = Math.max(RIGHT_MIN, total() - left - CENTER_MIN);
+    return Math.min(Math.max(v, RIGHT_MIN), max);
+  }
+  function current() {
+    return [layout.offsetWidth ? parseFloat(getComputedStyle(layout).getPropertyValue("--leftW")) : LEFT_DEFAULT,
+            parseFloat(getComputedStyle(layout).getPropertyValue("--rightW")) || RIGHT_DEFAULT];
+  }
+  function save(left, right) {
+    try { localStorage.setItem(KEY, JSON.stringify([left, right])); } catch (e) {}
+  }
+
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
+  if (Array.isArray(saved) && saved.length === 2) {
+    const [l0, r0] = saved;
+    const left = clampLeft(l0, r0), right = clampRight(r0, left);
+    apply(left, right);
+  }
+
+  document.querySelectorAll(".split").forEach((h) => {
+    const side = h.dataset.side;
+    h.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      h.setPointerCapture(e.pointerId);
+      h.classList.add("drag");
+      const [startLeft, startRight] = current();
+      const startX = e.clientX;
+
+      const move = (ev) => {
+        const dx = ev.clientX - startX;
+        if (side === "left") {
+          const left = clampLeft(startLeft + dx, startRight);
+          apply(left, startRight);
+        } else {
+          const right = clampRight(startRight - dx, startLeft);
+          apply(startLeft, right);
+        }
+      };
+      const up = (ev) => {
+        h.classList.remove("drag");
+        h.removeEventListener("pointermove", move);
+        h.removeEventListener("pointerup", up);
+        h.removeEventListener("pointercancel", up);
+        try { h.releasePointerCapture(ev.pointerId); } catch (err) {}
+        const [l1, r1] = current();
+        save(l1, r1);
+      };
+      h.addEventListener("pointermove", move);
+      h.addEventListener("pointerup", up);
+      h.addEventListener("pointercancel", up);
+    });
+    h.addEventListener("dblclick", () => {
+      apply(LEFT_DEFAULT, RIGHT_DEFAULT);
+      save(LEFT_DEFAULT, RIGHT_DEFAULT);
+    });
+  });
+
+  window.addEventListener("resize", () => {
+    const [l, r] = current();
+    const left = clampLeft(l, r);
+    const right = clampRight(r, left);
+    apply(left, right);
+  });
+})();
+
+</script>
+<script>
+/* 页面一打开就自动拉一次手机配置，不用再手动点“读取手机配置”；
+   离线直接打开本地文件（没有服务）时 ping 不通就静默跳过。 */
+(async () => {
+  let ok = false;
+  try {
+    const p = await fetch("/ping", { cache: "no-store" });
+    ok = p.ok;
+  } catch (e) { ok = false; }
+  if (!ok) return;
+  setTimeout(() => { try { document.getElementById("readPhone").click(); } catch (e) {} }, 150);
+})();
+</script>
+</body>
+</html>

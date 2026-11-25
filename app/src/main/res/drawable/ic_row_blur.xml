@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- 磨砂叠层：后面一块实心面板，前面一块半透明面板压上去 —— 背景被半透层盖住 = 毛玻璃 -->
+    <path android:fillColor="@color/settings_row_icon" android:fillAlpha="0.95"
+        android:pathData="M11.5,3 H19 A2.5,2.5 0 0 1 21.5,5.5 V13 A2.5,2.5 0 0 1 19,15.5 H11.5 A2.5,2.5 0 0 1 9,13 V5.5 A2.5,2.5 0 0 1 11.5,3 Z"/>
+    <path android:fillColor="@color/settings_row_icon" android:fillAlpha="0.28"
+        android:pathData="M5,8.5 H12.5 A2.5,2.5 0 0 1 15,11 V18.5 A2.5,2.5 0 0 1 12.5,21 H5 A2.5,2.5 0 0 1 2.5,18.5 V11 A2.5,2.5 0 0 1 5,8.5 Z"/>
+    <path android:strokeColor="@color/settings_row_icon" android:strokeWidth="1.6"
+        android:strokeAlpha="0.6" android:fillColor="#00000000"
+        android:pathData="M5,8.5 H12.5 A2.5,2.5 0 0 1 15,11 V18.5 A2.5,2.5 0 0 1 12.5,21 H5 A2.5,2.5 0 0 1 2.5,18.5 V11 A2.5,2.5 0 0 1 5,8.5 Z"/>
+</vector>
