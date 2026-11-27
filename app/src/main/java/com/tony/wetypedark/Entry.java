@@ -1467,6 +1467,9 @@ public final class Entry extends XposedModule {
             java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
     /** 长按气泡字母的横向压缩，抵消系统字体 + 字重描边带来的字形外扩 */
     private static final float BUBBLE_TEXT_SCALE_X = 0.9f;
+    /** 候选栏顶部那串输入编码（如 mo'mo）的位移（dp）：向右 10、向下 3，避开面板圆角 */
+    private static final float PINYIN_OFFSET_X_DP = 10f;
+    private static final float PINYIN_OFFSET_Y_DP = 3f;
     private volatile String micIconData = "";
     private volatile android.graphics.Bitmap micIconBitmap;
     private volatile android.graphics.Paint micIconPaint;
@@ -1499,10 +1502,13 @@ public final class Entry extends XposedModule {
     private static final int DEFAULT_TOP_GLOW_ALPHA = 100;   // 百分比 0–100
     private static final int DEFAULT_TOP_GLOW_PX = 30;
     private static final float DEFAULT_TOP_GLOW_WIDTH = 2f;   // 可见线宽 px
+    private static final float DEFAULT_TOP_GLOW_BLUR = 12f;    // 高光模糊半径 px
     private volatile int topGlowAlpha = DEFAULT_TOP_GLOW_ALPHA;
     private volatile int topGlowHeightPx = DEFAULT_TOP_GLOW_PX;
     private volatile float topGlowWidthPx = DEFAULT_TOP_GLOW_WIDTH;
+    private volatile float topGlowBlurPx = DEFAULT_TOP_GLOW_BLUR;
     private volatile float appliedGlowWidth = -1f;
+    private volatile float appliedGlowBlur = -1f;
     private int appliedGlowAlpha = -1;
     private int appliedGlowPx = -1;
     private boolean logoLogged = false;
@@ -1573,6 +1579,15 @@ public final class Entry extends XposedModule {
             return;
         }
         if (processName == null || !processName.endsWith(PROCESS)) {
+            // 主进程 / 其它进程：只装「屏蔽更新」。
+            // 升级弹窗、下载、安装都在主进程里跑（IPC 回调 MainProcessIPCService 里也会调安装），
+            // 之前只在 :hld 装，所以开关看着没生效。
+            try {
+                UpdateBlock.INSTANCE.install(this, param.getDefaultClassLoader());
+                log(Log.INFO, TAG, "update block installed in " + processName);
+            } catch (Throwable t) {
+                log(Log.ERROR, TAG, "update block install failed", t);
+            }
             return;
         }
         try {
@@ -2524,37 +2539,607 @@ public final class Entry extends XposedModule {
     private final java.util.Set<String> bubbleCallerSeen =
             java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
+    /** 钩「真实 Canvas」上的所有文字绘制重载：气泡缩放 + 拼音串位移 */
     private void installBubbleTextHook() {
-        String[] sigs = {"string", "cs"};
-        for (String sig : sigs) {
-            try {
-                java.lang.reflect.Method target = "string".equals(sig)
-                        ? android.graphics.Canvas.class.getDeclaredMethod("drawText",
-                        String.class, float.class, float.class, android.graphics.Paint.class)
-                        : android.graphics.Canvas.class.getDeclaredMethod("drawText",
-                        CharSequence.class, int.class, int.class, float.class, float.class,
-                        android.graphics.Paint.class);
-                install(target, "wetype_dark_bubble_text_" + sig, chain -> {
-                    Object pObj = "string".equals(sig) ? chain.getArg(3) : chain.getArg(5);
-                    if (pObj instanceof android.graphics.Paint && keyDrawWindow) {
-                        android.graphics.Paint paint = (android.graphics.Paint) pObj;
-                        // 只有大水号的字才可能是气泡那个字母，别的文字连栈都不查
-                        if (paint.getTextSize() >= 36f && isBubbleCaller()) {
-                            float old = paint.getTextScaleX();
-                            paint.setTextScaleX(BUBBLE_TEXT_SCALE_X);
-                            try {
-                                return chain.proceed();
-                            } finally {
-                                paint.setTextScaleX(old);
+        int total = 0;
+        Class<?> c = canvasClass();
+        while (c != null) {
+            total += hookTextMethodsOn(c);
+            if (c == android.graphics.Canvas.class) {
+                break;
+            }
+            c = c.getSuperclass();
+        }
+        probe("canvas text hooks total +" + total);
+        installKeyboardCanvasShift();
+    }
+
+    /** 面板顶部那串编码是 native 绘制，拦不到坐标，只能整体平移键盘画布 */
+    private void installKeyboardCanvasShift() {
+        try {
+            java.lang.reflect.Method draw = android.view.View.class.getDeclaredMethod(
+                    "draw", android.graphics.Canvas.class);
+            draw.setAccessible(true);
+            install(draw, "wetype_dark_keyboard_canvas_shift", chain -> {
+                Object self = chain.getThisObject();
+                if (self == null) {
+                    return chain.proceed();
+                }
+                String cn = self.getClass().getName();
+                Object c0 = chain.getArg(0);
+                if (!(c0 instanceof android.graphics.Canvas)) {
+                    return chain.proceed();
+                }
+                // 不再平移（会连带键帽），只登记每个 View 在屏幕上的位置，便于找出编码串的宿主
+                if (viewLogCount < 60) {
+                    try {
+                        int[] loc = new int[2];
+                        ((android.view.View) self).getLocationOnScreen(loc);
+                        String key = self.getClass().getName() + "@" + loc[0] + "," + loc[1];
+                        if (!seenViews.contains(key)) {
+                            seenViews.add(key);
+                            viewLogCount++;
+                            probe("view " + self.getClass().getSimpleName()
+                                    + " at " + loc[0] + "," + loc[1]
+                                    + " size=" + ((android.view.View) self).getWidth()
+                                    + "x" + ((android.view.View) self).getHeight());
+                        }
+                    } catch (Throwable ignore) {
+                    }
+                }
+                if (self instanceof android.view.View) {
+                    android.view.View selfV = (android.view.View) self;
+                    // 候选栏最左那条 1px 亮竖线：日志定位到 `View at 0,1781 size=1x58`，
+                    // 是宿主自带的 1px 分隔条，正好贴在屏幕左边缘。宽<=2、高 40..90、屏幕 x==0 的直接不画。
+                    if (selfV.getWidth() <= 2
+                            && selfV.getHeight() >= 40 && selfV.getHeight() <= 90) {
+                        int[] loc = new int[2];
+                        selfV.getLocationOnScreen(loc);
+                        if (loc[0] == 0) {
+                            if (!candLineSkippedLogged) {
+                                candLineSkippedLogged = true;
+                                probe("skip 1px divider at " + loc[0] + "," + loc[1]
+                                        + " size=" + selfV.getWidth() + "x" + selfV.getHeight());
                             }
+                            return null;
                         }
                     }
+                    hookComposingTextDraw(selfV);
+                }
+                if (false && cn.contains("ImeStrikeTextView")) {
+                    android.graphics.Canvas cv = (android.graphics.Canvas) c0;
+                    float dx = PINYIN_OFFSET_X_DP * densityOf();
+                    float dy = PINYIN_OFFSET_Y_DP * densityOf();
+                    if (!candShiftLogged) {
+                        candShiftLogged = true;
+                        probe("composing text shift on " + cn + " dx=" + dx + " dy=" + dy);
+                    }
+                    int save = cv.save();
+                    cv.translate(dx, dy);
+                    try {
+                        return chain.proceed();
+                    } finally {
+                        cv.restoreToCount(save);
+                    }
+                }
+                return chain.proceed();
+            });
+            probe("view audit hook ok");
+        } catch (Throwable t) {
+            probe("keyboard canvas shift hook failed: " + t);
+        }
+    }
+
+    /** 面板顶部的输入编码是 StaticLayout 画的，在 draw() 期间平移画布 */
+    private void installStaticLayoutShift() {
+        try {
+            Class<?> sl = Class.forName("android.text.Layout");
+            java.lang.reflect.Method draw = sl.getDeclaredMethod("draw",
+                    android.graphics.Canvas.class);
+            final java.lang.reflect.Field fText = sl.getDeclaredField("mText");
+            fText.setAccessible(true);
+            draw.setAccessible(true);
+            install(draw, "wetype_dark_staticlayout_draw", chain -> {
+                Object self = chain.getThisObject();
+                Object raw = null;
+                try {
+                    raw = fText.get(self);
+                } catch (Throwable ignore) {
+                }
+                final String text = raw == null ? null : raw.toString();
+                if (text == null || !isPinyinLike(text)) {
+                    return chain.proceed();
+                }
+                if (!layoutShiftLogged) {
+                    layoutShiftLogged = true;
+                    probe("static layout shift text=" + text + " lines="
+                            + ((android.text.Layout) self).getLineCount());
+                }
+                Object cObj = chain.getArg(0);
+                if (!(cObj instanceof android.graphics.Canvas)) {
+                    return chain.proceed();
+                }
+                android.graphics.Canvas canvas = (android.graphics.Canvas) cObj;
+                float dx = PINYIN_OFFSET_X_DP * densityOf();
+                float dy = PINYIN_OFFSET_Y_DP * densityOf();
+                int save = canvas.save();
+                canvas.translate(dx, dy);
+                try {
+                    return chain.proceed();
+                } finally {
+                    canvas.restoreToCount(save);
+                }
+            });
+            probe("static layout shift hook ok");
+        } catch (Throwable t) {
+            probe("static layout shift hook failed: " + t);
+        }
+    }
+
+    private int hookTextMethodsOn(Class<?> cc) {
+        int hooked = 0;
+        java.lang.reflect.Method[] methods;
+        try {
+            methods = cc.getDeclaredMethods();
+        } catch (Throwable t) {
+            probe("canvas text decl fail " + cc.getSimpleName() + ": " + t);
+            return 0;
+        }
+        for (java.lang.reflect.Method m : methods) {
+            String name = m.getName();
+            if (!"drawText".equals(name) && !"drawTextRun".equals(name)) {
+                continue;
+            }
+            Class<?>[] ps = m.getParameterTypes();
+            int textAt = -1;
+            for (int i = 0; i < ps.length; i++) {
+                if (ps[i] == String.class || ps[i] == CharSequence.class || ps[i] == char[].class) {
+                    textAt = i;
+                    break;
+                }
+            }
+            if (textAt < 0) {
+                continue;
+            }
+            int paintAt = -1;
+            for (int i = ps.length - 1; i >= 0; i--) {
+                if (ps[i] == android.graphics.Paint.class) {
+                    paintAt = i;
+                    break;
+                }
+            }
+            if (paintAt < 0) {
+                continue;
+            }
+            int yAt = -1;
+            int xAt = -1;
+            for (int i = paintAt - 1; i >= 0; i--) {
+                if (ps[i] != float.class) {
+                    continue;
+                }
+                if (yAt < 0) {
+                    yAt = i;
+                } else {
+                    xAt = i;
+                    break;
+                }
+            }
+            if (xAt < 0 || yAt < 0) {
+                continue;
+            }
+            final int ft = textAt;
+            final int fx = xAt;
+            final int fy = yAt;
+            final int fp = paintAt;
+            final Class<?>[] fps = ps;
+            final String mname = name;
+            try {
+                m.setAccessible(true);
+                install(m, "wetype_dark_canvas_text_" + cc.getSimpleName() + "_" + mname + "_" + hooked, chain -> {
+                    Object pObj = chain.getArg(fp);
+                    if (!(pObj instanceof android.graphics.Paint) || !keyDrawWindow) {
+                        return chain.proceed();
+                    }
+                    android.graphics.Paint paint = (android.graphics.Paint) pObj;
+                    String text = textOf(chain, ft, fps);
+                    if (text == null) {
+                        return chain.proceed();
+                    }
+                    if (paint.getTextSize() >= 36f && isBubbleCaller()) {
+                        float old = paint.getTextScaleX();
+                        paint.setTextScaleX(BUBBLE_TEXT_SCALE_X);
+                        try {
+                            return chain.proceed();
+                        } finally {
+                            paint.setTextScaleX(old);
+                        }
+                    }
+                    float tyNow = ((Number) chain.getArg(fy)).floatValue();
+                    if (!topStackLogged && tyNow <= 110f && text.length() <= 24) {
+                        topStackLogged = true;
+                        StringBuilder sb = new StringBuilder();
+                        StackTraceElement[] st = new Throwable().getStackTrace();
+                        for (int i = 0; i < Math.min(14, st.length); i++) {
+                            sb.append(st[i].getClassName()).append('#')
+                                    .append(st[i].getMethodName()).append(" <- ");
+                        }
+                        probe("topline stack text=" + text + " x=" + chain.getArg(fx)
+                                + " y=" + tyNow + " :: " + sb);
+                    }
+                    if (isAsciiText(text) && seenDrawTexts.size() < 70) {
+                        Object[] a0 = chain.getArgs().toArray();
+                        String caller = callerName();
+                        String key = text + "@" + caller + "@" + mname;
+                        if (!seenDrawTexts.contains(key)) {
+                            seenDrawTexts.add(key);
+                            probe("draw text=" + text + " x=" + a0[fx] + " y=" + a0[fy]
+                                    + " size=" + paint.getTextSize() + " caller=" + caller
+                                    + " via=" + mname);
+                        }
+                    }
+                    // 面板顶部编码串不走这里（这里只有键帽/侧栏字母），整体位移改在 StaticLayout 层做
                     return chain.proceed();
                 });
-                probe("bubble text hook ok: " + sig);
+                hooked++;
             } catch (Throwable t) {
-                probe("bubble text hook failed " + sig + ": " + t);
+                probe("canvas text hook failed " + name + ": " + t);
             }
+        }
+        probe("canvas text hooks on " + cc.getSimpleName() + " +" + hooked);
+        return hooked;
+    }
+
+    private static final java.util.HashSet<String> seenDrawTexts = new java.util.HashSet<>();
+
+    private static boolean isAsciiText(String s) {
+        if (s == null || s.isEmpty() || s.length() > 16) {
+            return false;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '\'';
+            if (!ok) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 面板顶部那串输入编码画在 y≈60 的顶部区，键帽字母都在 y>=115 */
+    private static boolean isTopLineY(float y) {
+        return y <= 110f;
+    }
+
+    /** 该 Canvas 当前矩阵的缩放系数（微信绘图坐标系可能是被缩放的超大坐标） */
+    private static float canvasScaleOf(Object canvas) {
+        try {
+            if (!(canvas instanceof android.graphics.Canvas)) {
+                return 1f;
+            }
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            ((android.graphics.Canvas) canvas).getMatrix(m);
+            float[] v = new float[9];
+            m.getValues(v);
+            float s = Math.abs(v[android.graphics.Matrix.MSCALE_X]);
+            if (s < 0.0001f || s > 1000f) {
+                return 1f;
+            }
+            return s;
+        } catch (Throwable ignore) {
+            return 1f;
+        }
+    }
+
+    /** 从 drawText / drawTextRun 参数里取出这一段文字（String / CharSequence / char[]） */
+    private static String textOf(XposedInterface.Chain chain, int textAt, Class<?>[] ps) {
+        Object t0 = chain.getArg(textAt);
+        if (t0 == null) {
+            return null;
+        }
+        try {
+            if (t0 instanceof String) {
+                String s = (String) t0;
+                if (textAt + 2 < ps.length && ps[textAt + 1] == int.class
+                        && ps[textAt + 2] == int.class) {
+                    int a = ((Number) chain.getArg(textAt + 1)).intValue();
+                    int b = ((Number) chain.getArg(textAt + 2)).intValue();
+                    if (b > a && b <= s.length()) {
+                        return s.substring(a, b);
+                    }
+                }
+                return s;
+            }
+            if (t0 instanceof char[]) {
+                char[] arr = (char[]) t0;
+                if (textAt + 2 < ps.length && ps[textAt + 1] == int.class
+                        && ps[textAt + 2] == int.class) {
+                    int a = ((Number) chain.getArg(textAt + 1)).intValue();
+                    int n = ((Number) chain.getArg(textAt + 2)).intValue();
+                    if (n > 0 && a >= 0 && a + n <= arr.length) {
+                        return new String(arr, a, n);
+                    }
+                }
+                return new String(arr);
+            }
+            if (t0 instanceof CharSequence) {
+                CharSequence cs = (CharSequence) t0;
+                if (textAt + 2 < ps.length && ps[textAt + 1] == int.class
+                        && ps[textAt + 2] == int.class) {
+                    int a = ((Number) chain.getArg(textAt + 1)).intValue();
+                    int b = ((Number) chain.getArg(textAt + 2)).intValue();
+                    if (b > a && b <= cs.length()) {
+                        return cs.subSequence(a, b).toString();
+                    }
+                }
+                return cs.toString();
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
+
+    private volatile boolean pinyinCallerLogged = false;
+    private int shiftLogCount = 0;
+    private boolean layoutShiftLogged = false;
+    private boolean topStackLogged = false;
+
+    private boolean composingDrawHooked = false;
+    private int composingFindTries = 0;
+
+    /** ImeStrikeTextView 覆写了 draw()，hook View.draw 拦不到，必须直接挂它自己的 draw */
+    private void hookComposingTextDraw(android.view.View anyView) {
+        if (composingDrawHooked || composingFindTries > 120) {
+            return;
+        }
+        composingFindTries++;
+        try {
+            android.view.View tv = findViewBySimpleClass(anyView.getRootView(), "ImeStrikeTextView");
+            if (tv == null) {
+                return;
+            }
+            composingDrawHooked = true;
+            installCandidateBorderOff(anyView.getRootView());
+            final android.view.View strikeTv = tv;
+            try {
+                // 只把父容器放宽，别再动自己（动自己会被重新测量成 15x0）
+                int extraX = (int) Math.ceil(PINYIN_OFFSET_X_DP * densityOf());
+                if (strikeTv.getParent() instanceof android.view.ViewGroup) {
+                    android.view.ViewGroup pg = (android.view.ViewGroup) strikeTv.getParent();
+                    pg.setClipChildren(false);
+                    pg.setClipToPadding(false);
+                    android.view.ViewGroup.LayoutParams plp = pg.getLayoutParams();
+                    if (plp != null && plp.width > 0) {
+                        plp.width += extraX;
+                        pg.setLayoutParams(plp);
+                    }
+                }
+            } catch (Throwable ignore) {
+            }
+            java.lang.reflect.Method m = tv.getClass().getDeclaredMethod(
+                    "draw", android.graphics.Canvas.class);
+            m.setAccessible(true);
+            install(m, "wetype_dark_composing_draw", chain -> {
+                Object c0 = chain.getArg(0);
+                if (!(c0 instanceof android.graphics.Canvas)) {
+                    return chain.proceed();
+                }
+                android.graphics.Canvas cv = (android.graphics.Canvas) c0;
+                float dx = PINYIN_OFFSET_X_DP * densityOf();
+                float dy = PINYIN_OFFSET_Y_DP * densityOf();
+                if (!composingShiftLogged) {
+                    composingShiftLogged = true;
+                    probe("composing draw shift dx=" + dx + " dy=" + dy);
+                }
+                int save = cv.save();
+                cv.translate(dx, dy);
+                try {
+                    return chain.proceed();
+                } finally {
+                    cv.restoreToCount(save);
+                }
+            });
+            probe("composing text draw hook ok on " + tv.getClass().getName());
+        } catch (Throwable t) {
+            probe("composing draw hook failed: " + t);
+        }
+    }
+
+
+    /** 让 View 及其上面两层父容器各加宽/加高一点，并关掉子裁剪，避免平移后被边界切掉 */
+    private void expandClipChain(android.view.View tv, int extraX, int extraY) {
+        android.view.View v = tv;
+        for (int depth = 0; depth < 3 && v != null; depth++) {
+            try {
+                android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
+                if (lp != null && lp.width > 0) {
+                    lp.width += extraX;
+                }
+                if (lp != null && lp.height > 0) {
+                    lp.height += extraY;
+                }
+                if (lp != null) {
+                    v.setLayoutParams(lp);
+                }
+                if (v.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) v.getParent()).setClipChildren(false);
+                    ((android.view.ViewGroup) v.getParent()).setClipToPadding(false);
+                }
+                probe("expand clip " + v.getClass().getSimpleName() + " -> "
+                        + v.getWidth() + "x" + v.getHeight());
+            } catch (Throwable t) {
+                probe("expand clip fail: " + t);
+            }
+            v = v.getParent() instanceof android.view.View ? (android.view.View) v.getParent() : null;
+        }
+    }
+
+
+    private boolean candidateBorderHooked = false;
+    private boolean candLineSkippedLogged = false;
+
+    /**
+     * 候选栏左侧那条 1px 亮竖线来自 ImeCandidateView.onDraw 里的 needDrawBorder 边框
+     * （borderPaint 用的是 ime_color_00，暗色下偏亮）。出现复制/剪贴板类候选时会被打开。
+     * 直接把这次绘制的 needDrawBorder 压成 false。
+     */
+    private void installCandidateBorderOff(android.view.View root) {
+        if (candidateBorderHooked) {
+            return;
+        }
+        try {
+            android.view.View cv = findViewBySimpleClass(root, "ImeCandidateView");
+            if (cv == null) {
+                return;
+            }
+            candidateBorderHooked = true;
+            StringBuilder sb = new StringBuilder();
+            java.lang.reflect.Field target = null;
+            for (java.lang.reflect.Field fd : cv.getClass().getDeclaredFields()) {
+                String n = fd.getName();
+                sb.append(n).append(':').append(fd.getType().getSimpleName()).append(' ');
+                if (target == null && (n.toLowerCase().contains("border")
+                        || n.toLowerCase().contains("divider"))) {
+                    target = fd;
+                }
+            }
+            probe("candidate fields: " + sb);
+            final java.lang.reflect.Field f = target;
+            if (f == null) {
+                probe("candidate border field not found");
+                return;
+            }
+            f.setAccessible(true);
+            java.lang.reflect.Method onDraw = cv.getClass().getDeclaredMethod(
+                    "onDraw", android.graphics.Canvas.class);
+            onDraw.setAccessible(true);
+            install(onDraw, "wetype_dark_candidate_border_off", chain -> {
+                try {
+                    if (f.getType() == boolean.class) {
+                        f.setBoolean(chain.getThisObject(), false);
+                    } else if (f.getType() == int.class) {
+                        f.setInt(chain.getThisObject(), 0);
+                    }
+                } catch (Throwable ignore) {
+                }
+                return chain.proceed();
+            });
+            probe("candidate border off hook ok");
+        } catch (Throwable t) {
+            probe("candidate border hook failed: " + t);
+        }
+    }
+
+    private static android.view.View findViewBySimpleClass(android.view.View root, String simple) {
+        if (root == null) {
+            return null;
+        }
+        if (simple.equals(root.getClass().getSimpleName())) {
+            return root;
+        }
+        if (root instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) root;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                android.view.View f = findViewBySimpleClass(g.getChildAt(i), simple);
+                if (f != null) {
+                    return f;
+                }
+            }
+        }
+        return null;
+    }
+    private int viewLogCount = 0;
+    private boolean candShiftLogged = false;
+    private boolean composingShiftLogged = false;
+    private static final java.util.HashSet<String> seenViews = new java.util.HashSet<>();
+
+    /** 微信的 Canvas 是 RecordingCanvas，它自己声明了 drawText/drawTextRun，钩基类一次都不触发 */
+    private Class<?> canvasClass() {
+        try {
+            return Class.forName("android.graphics.RecordingCanvas");
+        } catch (Throwable t) {
+            return android.graphics.Canvas.class;
+        }
+    }
+
+    /** 纯小写字母 / 撇号组成的短串，判断是拼音输入编码而不是键帽大写字母 */
+    private static boolean isPinyinLike(String s) {
+        if (s.isEmpty() || s.length() > 20) {
+            return false;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || c == '\'')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 取栈里第一个「非框架、非宿主键帽绘制器」的调用方类名 */
+    private static String callerName() {
+        try {
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            for (StackTraceElement el : st) {
+                String cn = el.getClassName();
+                if (cn.startsWith("com.tony.wetypedark") || cn.startsWith("android.")
+                        || cn.startsWith("java.") || cn.startsWith("de.robv")
+                        || cn.contains(".selfdraw.drawmethod")) {
+                    continue;
+                }
+                return cn;
+            }
+        } catch (Throwable ignore) {
+        }
+        return null;
+    }
+
+    /** 候选栏顶部输入编码串（mo'mo）整体右 10dp、下 3dp：避开面板顶部圆角 */
+    private Object shiftPinyinText(XposedInterface.Chain chain, String sig) throws Throwable {
+        try {
+            Object t0 = chain.getArg(0);
+            String text;
+            if ("string".equals(sig)) {
+                if (!(t0 instanceof String)) {
+                    return chain.proceed();
+                }
+                text = (String) t0;
+            } else {
+                if (!(t0 instanceof CharSequence)) {
+                    return chain.proceed();
+                }
+                int s = ((Number) chain.getArg(1)).intValue();
+                int e = ((Number) chain.getArg(2)).intValue();
+                CharSequence cs = (CharSequence) t0;
+                if (e <= s || e > cs.length()) {
+                    return chain.proceed();
+                }
+                text = cs.subSequence(s, e).toString();
+            }
+            if (!isPinyinLike(text)) {
+                return chain.proceed();
+            }
+            String caller = callerName();
+            if (caller != null && !pinyinCallerLogged) {
+                pinyinCallerLogged = true;
+                probe("pinyin draw caller=" + caller + " text=" + text);
+            }
+            if (caller == null || !caller.contains("candidate")) {
+                return chain.proceed();
+            }
+            Object[] args = chain.getArgs().toArray();
+            float dx = PINYIN_OFFSET_X_DP * densityOf();
+            float dy = PINYIN_OFFSET_Y_DP * densityOf();
+            if ("string".equals(sig)) {
+                args[1] = ((Number) args[1]).floatValue() + dx;
+                args[2] = ((Number) args[2]).floatValue() + dy;
+            } else {
+                args[3] = ((Number) args[3]).floatValue() + dx;
+                args[4] = ((Number) args[4]).floatValue() + dy;
+            }
+            return chain.proceed(args);
+        } catch (Throwable ignore) {
+            return chain.proceed();
         }
     }
 
@@ -4959,6 +5544,10 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
             if (glowWidth >= 0f) {
                 topGlowWidthPx = Math.min(16f, glowWidth);
             }
+            float glowBlur = set == null ? -1f : (float) set.optDouble("top_glow_blur", -1d);
+            if (glowBlur >= 0f) {
+                topGlowBlurPx = Math.min(48f, glowBlur);
+            }
 
             // 下滑手势小字颜色（全选 / 剪切 / 复制 / 粘贴…）
             keyFnTextColor = parseHexColor(set == null ? null : set.optString("key_fn_text", ""));
@@ -6021,17 +6610,12 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
             boolean fullHeight = panelHeight > 0
                     && panelHeight < screenHeight - Math.round(4f * density);
 
-            // 悬浮判据不能只看「没占满宽」：横屏非悬浮键盘本身就只有 2631 宽（屏 2772），
-            // 以前一律当成悬浮，于是面板 alpha 归零 → 横屏键盘没有背景。
-            // 悬浮键盘宽度约 90% 屏宽，横屏键盘约 95%，用 93% 分界。
-            boolean floating = panel.getWidth() > 0
-                    && panel.getWidth() <= Math.round(screenWidth * 0.93f);
             installLayerBackgroundGuard();
             ensureLayerWatchers(panel);
             layersDirty.set(true);
 
             // 面板自己裁圆角（悬浮键盘不裁）；只影响面板这一层，子级布局不动
-            if (!floating) {
+            if (fullWidth) {
                 ensureOutline(panel, radius);
             } else if (panel.getWidth() > 0) {
                 clearOutline(panel);
@@ -6045,7 +6629,7 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
                 log(Log.INFO, TAG, "view tree dumped");
             }
             // 悬浮/分体键盘的判据就是「宽度没占满屏」：横屏全键盘也是不满高，但它是满宽的
-
+            boolean floating = !fullWidth;
             if (floating && !floatingDumped) {
                 floatingDumped = true;
                 dumpRequested = true;
@@ -6119,7 +6703,7 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
                 || frostedChanged) {
             Drawable blur = null;
             // 亮色直角：去掉模糊层，只留实色
-            if (!floating && fullHeight && !panelTopFlat && frosted) {
+            if (fullWidth && fullHeight && !panelTopFlat && frosted) {
                 if (sameWindow && blurDrawable != null && !radiusChanged && !cornerChanged) {
                     blur = blurDrawable;
                 } else {
@@ -6138,6 +6722,7 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
             TopGlowDrawable glow = new TopGlowDrawable();
             appliedGlowAlpha = -1;
             appliedGlowPx = -1;
+            appliedGlowBlur = -1f;
             applyTopGlow(glow, radius);
             Drawable[] layers;
             if (floating) {
@@ -6331,18 +6916,21 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
 
     /** 把「透明度 / 像素数」落到高光 Drawable 上（百分比 → alpha） */
     private void applyTopGlow(TopGlowDrawable glow, float radius) {
+        log(Log.INFO, TAG, "topglow apply alpha=" + topGlowAlpha + " px=" + topGlowHeightPx
+                + " w=" + topGlowWidthPx + " blur=" + topGlowBlurPx + " r=" + radius);
         int alpha = Math.round(Math.max(0, Math.min(100, topGlowAlpha)) / 100f * 255f);
         int px = Math.max(0, Math.min(120, topGlowHeightPx));
-        glow.setParams(alpha, px, radius, topGlowWidthPx);
+        glow.setParams(alpha, px, radius, topGlowWidthPx, topGlowBlurPx);
         appliedGlowAlpha = topGlowAlpha;
         appliedGlowPx = topGlowHeightPx;
         appliedGlowWidth = topGlowWidthPx;
+        appliedGlowBlur = topGlowBlurPx;
     }
 
     /** 调色台改了高光参数：就地更新，不重建背景链 */
     private void updateTopGlow(Drawable bg, float radius) {
         if (appliedGlowAlpha == topGlowAlpha && appliedGlowPx == topGlowHeightPx
-                && appliedGlowWidth == topGlowWidthPx) {
+                && appliedGlowWidth == topGlowWidthPx && appliedGlowBlur == topGlowBlurPx) {
             return;
         }
         TopGlowDrawable glow = findGlowLayer(bg);
@@ -6351,7 +6939,7 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
         }
         applyTopGlow(glow, radius);
         probe("top glow alpha=" + topGlowAlpha + "% px=" + topGlowHeightPx
-                + " w=" + topGlowWidthPx);
+                + " w=" + topGlowWidthPx + " blur=" + topGlowBlurPx);
     }
 
     private static TopGlowDrawable findGlowLayer(Drawable bg) {
@@ -6745,223 +7333,11 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
      * 那几帧就看到三段各自的原色 → 颜色抖动。
      * 这里把这几个 View 的 setBackground / setBackgroundColor / setBackgroundResource 直接拦掉。
      */
-    private boolean floatTreeProbeInstalled = false;
-
-    /** 临时诊断：把悬浮弹窗（float / 含表情页）的视图树 dump 出来 */
-    private void installFloatTreeProbe() {
-        if (floatTreeProbeInstalled) {
-            return;
-        }
-        floatTreeProbeInstalled = true;
-        try {
-            Class<?> c = Class.forName("android.view.WindowManagerGlobal");
-            for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
-                if (!"addView".equals(m.getName()) || m.getParameterCount() < 3) {
-                    continue;
-                }
-                install(m, "wetype_dark_wmg_addview_probe", chain -> {
-                    Object res = chain.proceed();
-                    try {
-                        Object o = chain.getArg(0);
-                        if (o instanceof View) {
-                            View v = (View) o;
-                            String cn = v.getClass().getName();
-                            probe("WMG ADD " + cn + " " + v.getWidth() + "x"
-                                    + v.getHeight() + " emoji=" + containsEmoji(v, 0));
-                            if (cn.contains("float") || containsEmoji(v, 0)) {
-                                StringBuilder sb = new StringBuilder("FLOAT ROOT ")
-                                        .append(cn).append('\n');
-                                walk(v, 0, sb, 0);
-                                probe(sb.toString());
-                            } else if (cn.contains("PopupDecorView")) {
-                                final int[] tick = {0};
-                                final Runnable[] self = new Runnable[1];
-                                self[0] = () -> {
-                                    try {
-                                        boolean em = containsEmoji(v, 0);
-                                        if (em) {
-                                            applyFloatEmojiFill(v, 0);
-                                            StringBuilder sb = new StringBuilder("FLOAT EMOJI TREE t=")
-                                                    .append(tick[0]).append(' ')
-                                                    .append(v.getWidth()).append('x')
-                                                    .append(v.getHeight()).append('\n');
-                                            walk(v, 0, sb, 0);
-                                            probe(sb.toString());
-                                        }
-                                    } catch (Throwable ignore) {
-                                    }
-                                    tick[0]++;
-                                    if (tick[0] < 25) {
-                                        v.postDelayed(self[0], 1200L);
-                                    }
-                                };
-                                v.postDelayed(self[0], 700L);
-                            }
-                        }
-                    } catch (Throwable ignore) {
-                    }
-                    return res;
-                });
-            }
-            probe("float tree probe installed (WMG.addView)");
-        } catch (Throwable t) {
-            probe("float tree probe failed " + t);
-        }
-    }
-
-    /**
-     * 悬浮弹窗（float.e 那棵树）从来没走过我们的面板铺色流程：
-     *  - ImeRadiusLinearLayout = 面板容器，宿主给的是 ColorDrawable 浅灰白 → 换成我们的面板色（带圆角）
-     *  - ImeCandidateView = 候选条 → 换成候选条配置色
-     * 其余按键 / 图标自己画，不动。
-     */
-    /** 读 GradientDrawable 的实色（宿主那几块功能栏用的都是它） */
-    private Integer floatGradColor(Drawable d) {
-        try {
-            java.lang.reflect.Field f = d.getClass().getDeclaredField("mSolidColor");
-            f.setAccessible(true);
-            int c = (Integer) f.get(d);
-            if ((c >>> 24) != 0) {
-                return c;
-            }
-        } catch (Throwable ignore) {
-        }
-        try {
-            java.lang.reflect.Field f = d.getClass().getDeclaredField("mFillPaint");
-            f.setAccessible(true);
-            android.graphics.Paint p = (android.graphics.Paint) f.get(d);
-            return p.getColor();
-        } catch (Throwable ignore) {
-        }
-        return null;
-    }
-
-    private int styleFloatPopup(View v, int depth, int parentWidth) {
-        if (v == null || depth > 12) {
-            return 0;
-        }
-        int n = 0;
-        int w = v.getWidth();
-        String cls = v.getClass().getSimpleName();
-        try {
-            float dn = v.getResources().getDisplayMetrics().density;
-            int radius = Math.round(panelRadiusDp * dn);
-            // 浮窗最上面盖着两块满尺寸 ImageView（宿主九宫格底图），它们把面板色全遮住了：
-            // 实测给面板刷纯红，只有 21px 边框能看见红 → 这两张图必须让位
-            if (v instanceof android.widget.ImageView && parentWidth > 0
-                    && w >= parentWidth * 95 / 100 && v.getHeight() >= 40) {
-                ((android.widget.ImageView) v).setImageAlpha(0);
-                probe("float bg image view hidden " + w + "x" + v.getHeight());
-            }
-            if (cls.contains("ImeRadiusLinearLayout") && w > 0) {
-                int opaque = 0xFF000000 | (panelColor & 0xFFFFFF);
-                android.graphics.drawable.GradientDrawable gd =
-                        new android.graphics.drawable.GradientDrawable();
-                gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-                gd.setColor(opaque);
-                gd.setCornerRadius(radius);
-                LAYER_BG_ALLOW.set(true);
-                plantBackground(v, gd);
-                LAYER_BG_ALLOW.remove();
-                probe("float panel painted w=" + w + " h=" + v.getHeight()
-                        + " color=#" + Integer.toHexString(opaque) + " r=" + radius);
-                n++;
-            } else if (cls.contains("ImeCandidateView") && w > 0) {
-                // 非悬浮面板里候选条是自己让位、露出面板色的；悬浮这棵树上也得一样，
-                // 不能单独刷一层候选条色，否则候选条和面板两块颜色对不上。
-                int pc = 0xFF000000 | (panelColor & 0xFFFFFF);
-                LAYER_BG_ALLOW.set(true);
-                plantBackground(v, new SolidColorDrawable(pc));
-                LAYER_BG_ALLOW.remove();
-                probe("float cand painted panel color");
-                n++;
-            } else if (parentWidth > 0 && w >= parentWidth * 85 / 100 && v.getHeight() >= 40) {
-                // 功能栏 / 键区那两块满宽实色（宿主浅灰白）：同样让位，露出面板这一层
-                Drawable bgd = v.getBackground();
-                int c = 0;
-                if (bgd instanceof ColorDrawable) {
-                    c = ((ColorDrawable) bgd).getColor();
-                } else if (bgd != null && bgd.getClass().getName().contains("GradientDrawable")) {
-                    Integer gc = floatGradColor(bgd);
-                    if (gc != null) {
-                        c = gc;
-                    }
-                }
-                int expected = 0xFF000000 | (panelColor & 0xFFFFFF);
-                int a = c >>> 24, r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-                if (c != 0 && c != expected && a >= 0xF0 && r > 0xE0 && g > 0xE0 && b > 0xE0) {
-                    LAYER_BG_ALLOW.set(true);
-                    plantBackground(v, new SolidColorDrawable(expected));
-                    LAYER_BG_ALLOW.remove();
-                    probe("float row painted #" + Integer.toHexString(c) + "->#"
-                            + Integer.toHexString(expected) + " " + w + "x"
-                            + v.getHeight());
-                    n++;
-                }
-            }
-        } catch (Throwable t) {
-            probe("float paint fail " + t);
-        }
-        if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) {
-                n += styleFloatPopup(g.getChildAt(i), depth + 1, w);
-            }
-        }
-        return n;
-    }
-
-    /** 悬浮弹窗里的表情页：和普通模式一样补一层我方实色（宿主不给底色） */
-    private int applyFloatEmojiFill(View v, int depth) {
-        if (v == null || depth > 12) {
-            return 0;
-        }
-        int n = 0;
-        String cls = v.getClass().getSimpleName();
-        if (cls.contains("Emoji")) {
-            int opaque = 0xFF000000 | (panelColor & 0xFFFFFF);
-            Drawable bg = v.getBackground();
-            if (!(bg instanceof SolidColorDrawable) || ((SolidColorDrawable) bg).color != opaque) {
-                LAYER_BG_ALLOW.set(true);
-                plantBackground(v, new SolidColorDrawable(opaque));
-                LAYER_BG_ALLOW.remove();
-                probe("float emoji fill " + cls + " " + v.getWidth() + "x" + v.getHeight());
-                n++;
-            }
-        }
-        if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) {
-                n += applyFloatEmojiFill(g.getChildAt(i), depth + 1);
-            }
-        }
-        return n;
-    }
-
-    private boolean containsEmoji(View v, int depth) {
-        if (v == null || depth > 12) {
-            return false;
-        }
-        if (v.getClass().getSimpleName().contains("Emoji")) {
-            return true;
-        }
-        if (v instanceof ViewGroup) {
-            ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) {
-                if (containsEmoji(g.getChildAt(i), depth + 1)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private void installLayerBackgroundGuard() {
         if (layerGuardInstalled) {
             return;
         }
         layerGuardInstalled = true;
-        installFloatTreeProbe();
 
         // 宿主会在这几个入口重设背景；统一在 setBackground 里判一次：
         //   ① 我们自己种过的 View（面板本体、键盘 root 的实色层）→ 立刻把我们那张塞回去；
@@ -7190,22 +7566,7 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
             View root = idView(view, "root");
             if (root != null) {
                 if (floating) {
-                    if (needsSolidBackground(cls)) {
-                        // 悬浮键盘的 表情 / 剪贴板 / 常用语 页：面板层 alpha 归零了，
-                        // 宿主自己也不给底色，这里必须补一层我方实色，否则整页透明
-                        LAYER_BG_ALLOW.set(true);
-                        int opaqueF = 0xFF000000 | (panelColor & 0xFFFFFF);
-                        Drawable bgF = root.getBackground();
-                        if (!(bgF instanceof SolidColorDrawable)
-                                || ((SolidColorDrawable) bgF).color != opaqueF) {
-                            if (bgF != null && !(bgF instanceof SolidColorDrawable)) {
-                                releasedBackgrounds.put(root, bgF);
-                            }
-                            plantBackground(root, new SolidColorDrawable(opaqueF));
-                        }
-                        LAYER_BG_ALLOW.remove();
-                        probe("float solid page fill " + cls);
-                    } else if (root.getBackground() != null) {
+                    if (root.getBackground() != null) {
                         releasedBackgrounds.put(root, root.getBackground());
                         root.setBackground(null);
                         count++;
@@ -7660,6 +8021,9 @@ private void installKeyGradientHook(ClassLoader cl) throws Throwable {
             }
             if (json.has("topGlowWidth")) {
                 topGlowWidthPx = Math.min(16f, Math.max(0f, (float) json.optDouble("topGlowWidth", DEFAULT_TOP_GLOW_WIDTH)));
+            }
+            if (json.has("topGlowBlur")) {
+                topGlowBlurPx = Math.min(48f, Math.max(0f, (float) json.optDouble("topGlowBlur", DEFAULT_TOP_GLOW_BLUR)));
             }
 
             liveMtime = mtime;

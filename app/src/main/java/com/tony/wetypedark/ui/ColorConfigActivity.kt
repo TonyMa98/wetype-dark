@@ -81,6 +81,7 @@ import com.itos.coui.segmentbutton.SegmentedControl
 import com.itos.coui.slider.CouiSliderDefaults
 import com.itos.coui.slider.Slider
 import com.itos.coui.shape.CouiCapsuleShape
+import com.itos.coui.switch.Switch
 import com.itos.coui.text.CouiTextKind
 import com.itos.coui.text.rememberCouiTextStyle
 import com.itos.coui.theme.CouiTheme
@@ -243,6 +244,10 @@ private val CATALOG: List<ItemDef> = listOf(
         nums = listOf(
             DetailNum("面板圆角", "panel_radius_dp", 0f, 40f, 39, " dp", true),
             DetailNum("模糊半径", LIVE_BLUR_KEY, 0f, 40f, 39, " dp", true),
+            DetailNum("高光透明", "top_glow_alpha", 0f, 100f, 0, "%", true),
+            DetailNum("高光高度", "top_glow_px", 0f, 120f, 119, " px", true),
+            DetailNum("高光宽度", "top_glow_width", 0f, 8f, 15, " px", false),
+            DetailNum("高光模糊", "top_glow_blur", 0f, 48f, 49, " px", false),
         ),
     ),
     ItemDef(
@@ -281,7 +286,6 @@ private val CATALOG: List<ItemDef> = listOf(
         summary = "七种状态色与禁用\n透明度都在这里",
         iconRes = R.drawable.ic_cfg_send,
         colors = listOf(
-            DetailColor("可发送底色", "send_bg"),
             DetailColor("可发送文字", "send_active_text"),
             DetailColor("灰色态底", "send_grey_bg"),
             DetailColor("灰色态字", "send_grey_text"),
@@ -326,36 +330,11 @@ private val CATALOG: List<ItemDef> = listOf(
         colors = listOf(
             DetailColor("功能键文字", "key_fn_text"),
             DetailColor("功能键图标", "fn_icon"),
-        ),
-    ),
-    ItemDef(
-        id = "logo",
-        title = "Logo",
-        summary = "左下角圆底的底色，\n还有字形色",
-        iconRes = R.drawable.ic_cfg_logo,
-        colors = listOf(
             DetailColor("Logo 圆圈", "logo_circle"),
             DetailColor("Logo 字", "logo_glyph"),
         ),
     ),
-    ItemDef(
-        id = "glow",
-        title = "顶部高光",
-        summary = "沿面板上边缘的高光\n描边可调",
-        iconRes = R.drawable.ic_tab_sun,
-        nums = listOf(
-            DetailNum("高光透明", "top_glow_alpha", 0f, 100f, 0, "%", true),
-            DetailNum("高光高度", "top_glow_px", 0f, 120f, 119, " px", true),
-            DetailNum("高光宽度", "top_glow_width", 0f, 8f, 15, " px", false),
-        ),
-    ),
-    ItemDef(
-        id = "accent",
-        title = "主题色",
-        summary = "模块全局的强调色，\n一处改全都改",
-        iconRes = R.drawable.ic_row_palette,
-        colors = listOf(DetailColor("主题色", "accent")),
-    ),
+
 )
 
 // ------------------------------------------------------------------ 页面
@@ -426,10 +405,11 @@ private fun ColorConfigPage(dark: Boolean, onBack: () -> Unit) {
         }
         val hex = hexArgb(color)
         t.put(spec.key, hex)
-        // 主题色和发送键「可发送底色」在模块里是同一个值（send_bg），两边一起写
+        // 可发送底色默认跟随主题色（两者在模块里就是同一个值 send_bg）；
+        // 关掉跟随之后各写各的，不再互相覆盖。
         when (spec.key) {
-            "accent" -> t.put("send_bg", hex)
-            "send_bg" -> t.put("accent", hex)
+            "accent" -> if (t.optBoolean("send_bg_follow", true)) t.put("send_bg", hex)
+            "send_bg" -> t.put("send_bg_follow", false)
         }
         // 模块优先读多色标 key_grad_stops，起止色只在没有色标时生效；
         // 所以改起止色时必须把色标的首尾一起换掉，否则手机上看不到变化。
@@ -466,6 +446,16 @@ private fun ColorConfigPage(dark: Boolean, onBack: () -> Unit) {
             is String -> t.toFloatOrNull() ?: 0f
             else -> palette?.opt(spec.key)?.let { if (it is Number) it.toFloat() else 0f } ?: 0f
         }
+    }
+
+    fun setSendFollow(follow: Boolean) {
+        val obj = palette ?: return
+        val t = obj.optJSONObject(THEME_KEYS[themeIndex]) ?: JSONObject().also {
+            obj.put(THEME_KEYS[themeIndex], it)
+        }
+        t.put("send_bg_follow", follow)
+        if (follow) t.put("send_bg", t.optString("accent", "#FF4C8DFF"))
+        push(obj)
     }
 
     fun setKeyMode(mode: String) {
@@ -581,13 +571,15 @@ private fun ColorConfigPage(dark: Boolean, onBack: () -> Unit) {
 
             if (item == null) {
                 // ---------------- 一级：卡片列表（两列）
-                Text(
-                    text = "设置",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.title,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 14.dp),
-                )
+                Group {
+                    ColorRow(
+                        label = "主题色",
+                        color = parseColor(themeObj?.optString("accent")),
+                        dark = dark,
+                        onClick = { editing = DetailColor("主题色", "accent") },
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
                 CATALOG.chunked(2).forEach { pair ->
                     Row(
                         modifier = Modifier
@@ -617,6 +609,41 @@ private fun ColorConfigPage(dark: Boolean, onBack: () -> Unit) {
                 )
             } else {
                 // ---------------- 二级：这一项自己的参数
+                val sendFollow = themeObj?.optBoolean("send_bg_follow", true) ?: true
+                if (item.id == "send") {
+                    Group(title = "可发送底色") {
+                        Item(
+                            onClick = { setSendFollow(!sendFollow) },
+                            title = {
+                                Text(
+                                    text = "跟随主题色",
+                                    style = rememberCouiTextStyle(CouiTextKind.ItemTitle),
+                                    color = colors.title,
+                                )
+                            },
+                            summary = {
+                                Text(
+                                    text = if (sendFollow) "可发送底色就是主题色，改主题色这里会一起变"
+                                    else "已单独设置，不再跟主题色走",
+                                    style = rememberCouiTextStyle(CouiTextKind.ItemSummary),
+                                    color = colors.summary,
+                                )
+                            },
+                            trailing = {
+                                Switch(checked = sendFollow, onCheckedChange = null, dark = dark)
+                            },
+                        )
+                        if (!sendFollow) {
+                            Divider(color = colors.divider)
+                            ColorRow(
+                                label = "自定义底色",
+                                color = parseColor(themeObj?.optString("send_bg")),
+                                dark = dark,
+                                onClick = { editing = DetailColor("自定义底色", "send_bg") },
+                            )
+                        }
+                    }
+                }
                 if (item.colors.isNotEmpty()) {
                     Group(title = "颜色") {
                         item.colors.forEachIndexed { index, spec ->

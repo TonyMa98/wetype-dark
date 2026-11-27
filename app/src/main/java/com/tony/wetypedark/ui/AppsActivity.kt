@@ -189,6 +189,9 @@ class AppsActivity : ComponentActivity() {
         }
 
         loadApps()
+        // 开关是持久化的，AppOps 之前只在「拨开关」那一下写一次，
+        // 重装模块 / 系统重置过权限就会漏掉，这里每次进页面按当前开关值重设一次
+        applyInstallAppOp(updateBlock)
         // 进页面就把已有勾选推一次，避免设备上还没生成过文件时 :hld 读不到
         AppModeSync.schedule(this)
     }
